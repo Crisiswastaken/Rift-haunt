@@ -1,0 +1,1338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Felt Ghost States</title>
+<style>
+  :root { --bg: #0b0a1f; --fg: #e9e4ff; --muted: #a9a3d8; --panel: rgba(11, 10, 31, .74); --line: rgba(233, 228, 255, .16); }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #ui { position: fixed; left: 12px; bottom: 12px; background: var(--panel); padding: 10px 12px; border-radius: 10px; width: 236px; }
+  #ui[hidden], #live-ui[hidden] { display: none; }
+  #ui b { font-size: 14px; }
+  #ui label { display: flex; gap: 6px; align-items: center; margin: 3px 0; }
+  .row { display: flex; gap: 6px; margin: 8px 0; }
+  .muted { color: var(--muted); }
+  button { font: inherit; color: var(--fg); background: rgba(233, 228, 255, .06); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+  button:hover { background: rgba(233, 228, 255, .14); }
+  button.on { background: rgba(185, 168, 255, .3); border-color: rgba(185, 168, 255, .6); }
+  #casts button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 6px; flex: 1; }
+  #casts img { width: 34px; height: 34px; }
+  #casts span { font-size: 11px; color: var(--muted); }
+  #spawn { width: 100%; margin-top: 6px; }
+  pre { font: 12px/1.5 ui-monospace, monospace; margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line); white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <b>Felt ghost · state machine</b>
+  <div class="row"><button data-mode="live" class="on">Live</button><button data-mode="lineup">Lineup</button></div>
+  <div id="live-ui">
+    <div class="muted">Cast a symbol: it hits every ghost whose first symbol matches.</div>
+    <div class="row" id="casts"></div>
+    <label><input type="checkbox" id="auto" checked> auto-play</label>
+    <label><input type="checkbox" id="slow"> slow motion</label>
+    <label><input type="checkbox" id="labels" checked> state labels</label>
+    <button id="spawn">Spawn ghost (S)</button>
+    <div class="muted" style="margin-top:6px">Space pauses.</div>
+  </div>
+  <pre class="muted">spawn → approach
+approach ⇄ hit  (blinks when idle)
+last symbol → banish → poof
+reaches you → boo</pre>
+</div>
+<script>"use strict";
+(() => {
+  // reference/generated/v6b_layers/manifest.json
+  var manifest_default = {
+    source: "reference/generated/bg_v6b_misty_graveyard_eyelevel.png",
+    canvas: [
+      2048,
+      1152
+    ],
+    notes: [
+      "Every file in layers/ is a full-canvas 2048x1152 PNG already positioned; draw them in this order at (0,0).",
+      "blur = gaussian sigma in canvas px (depth of field). haze = mix toward haze_rgb after blur, then multiply by brightness.",
+      'blend "screen" layers are light (fog); draw with screen/additive at the given opacity.',
+      'Lantern sprites go where the "lanterns" entry sits; x/y is the sprite top-left on the canvas, glow_x/glow_y the flame centre.',
+      "lanterns/glow.png is a generic warm glow; draw it additively centred on glow_x/glow_y, sized ~2x glow_radius, and flicker its alpha/scale.",
+      "depth is a suggested parallax factor (0 = fixed sky, 1 = moves most).",
+      "fireflies: tiny additive sprites (lanterns/firefly.png, drawn size x size centred on x/y) wandering near the lanterns; draw each right after its lantern, same parallax depth. Formulas in fireflies.motion / fireflies.blink."
+    ],
+    layers: [
+      {
+        file: "layers/00_sky.png",
+        depth: 0,
+        blur: 0,
+        brightness: 0.92
+      },
+      {
+        file: "layers/01_moon.png",
+        depth: 0.02,
+        blur: 2,
+        brightness: 1
+      },
+      {
+        file: "layers/02_trees_far.png",
+        depth: 0.1,
+        blur: 12,
+        haze: 0.05,
+        haze_rgb: [
+          70,
+          68,
+          190
+        ],
+        brightness: 1.194
+      },
+      {
+        file: "layers/03_fog_back.png",
+        depth: 0.12,
+        blur: 10,
+        brightness: 0.8,
+        opacity: 0.75,
+        blend: "screen"
+      },
+      {
+        file: "layers/04_ground.png",
+        depth: 0.3,
+        blur: 2,
+        haze: 0.25,
+        haze_rgb: [
+          90,
+          86,
+          210
+        ],
+        brightness: 0.7
+      },
+      {
+        file: "layers/05_trees_mid.png",
+        depth: 0.35,
+        blur: 6,
+        haze: 0.16,
+        haze_rgb: [
+          70,
+          68,
+          190
+        ],
+        brightness: 0.96
+      },
+      {
+        file: "layers/06_trees_near.png",
+        depth: 0.6,
+        blur: 3,
+        haze: 0.067,
+        haze_rgb: [
+          70,
+          68,
+          190
+        ],
+        brightness: 0.913
+      },
+      {
+        lanterns: true,
+        note: "draw the lantern sprites here (between 06_trees_near and 07_graves_back)"
+      },
+      {
+        file: "layers/07_graves_back.png",
+        depth: 0.45,
+        blur: 3,
+        haze: 0.207,
+        haze_rgb: [
+          90,
+          86,
+          210
+        ],
+        brightness: 0.54
+      },
+      {
+        file: "layers/08_fog_ground.png",
+        depth: 0.5,
+        blur: 2,
+        brightness: 0.8,
+        opacity: 0.7,
+        blend: "screen"
+      },
+      {
+        file: "layers/09_graves_front.png",
+        depth: 0.8,
+        blur: 1,
+        haze: 0.134,
+        haze_rgb: [
+          90,
+          86,
+          210
+        ],
+        brightness: 0.646
+      },
+      {
+        file: "layers/10_grass_fg.png",
+        depth: 1,
+        blur: 3,
+        brightness: 1.053
+      }
+    ],
+    lanterns: [
+      {
+        name: "near_left",
+        file: "lanterns/lantern_near_left.png",
+        x: 39,
+        y: 423,
+        w: 186,
+        h: 199,
+        glow_x: 136,
+        glow_y: 532,
+        glow_radius: 120,
+        glow_rgb: [
+          255,
+          160,
+          80
+        ],
+        blur: 2,
+        depth: 0.6
+      },
+      {
+        name: "far_left",
+        file: "lanterns/lantern_far_left.png",
+        x: 328,
+        y: 550,
+        w: 145,
+        h: 152,
+        glow_x: 401,
+        glow_y: 631,
+        glow_radius: 70,
+        glow_rgb: [
+          255,
+          160,
+          80
+        ],
+        blur: 5,
+        depth: 0.35
+      },
+      {
+        name: "far_right",
+        file: "lanterns/lantern_far_right.png",
+        x: 1492,
+        y: 525,
+        w: 148,
+        h: 153,
+        glow_x: 1566,
+        glow_y: 608,
+        glow_radius: 70,
+        glow_rgb: [
+          255,
+          160,
+          80
+        ],
+        blur: 5,
+        depth: 0.35
+      },
+      {
+        name: "near_right",
+        file: "lanterns/lantern_near_right.png",
+        x: 1823,
+        y: 466,
+        w: 197,
+        h: 211,
+        glow_x: 1924,
+        glow_y: 581,
+        glow_radius: 120,
+        glow_rgb: [
+          255,
+          160,
+          80
+        ],
+        blur: 2,
+        depth: 0.6
+      }
+    ],
+    fireflies: {
+      file: "lanterns/firefly.png",
+      rgb: [
+        214,
+        255,
+        140
+      ],
+      blend: "lighter",
+      motion: "x = ax + amp_x*(0.65*sin(speed*t+p0) + 0.35*sin(2.3*speed*t+p1)) + 1.2*sin(5.1*t+p2); y = ay + amp_y*(0.6*sin(0.8*speed*t+p3) + 0.4*sin(1.9*speed*t+p4)) + 1.0*sin(4.3*t+p5)",
+      blink: "c = frac(t/blink_period + blink_phase); alpha = peak * (c < 0.4 ? sin(pi*c/0.4)^2 : 0)",
+      list: [
+        {
+          lantern: "near_left",
+          ax: 257,
+          ay: 495,
+          amp_x: 54,
+          amp_y: 36,
+          speed: 0.248,
+          phase: [
+            0.71,
+            1.46,
+            4.76,
+            0.93,
+            4.65,
+            4.16
+          ],
+          blink_period: 4.48,
+          blink_phase: 0.54,
+          size: 32,
+          peak: 0.7,
+          blur: 2,
+          depth: 0.6
+        },
+        {
+          lantern: "near_left",
+          ax: 152,
+          ay: 372,
+          amp_x: 72,
+          amp_y: 26,
+          speed: 0.224,
+          phase: [
+            5.9,
+            2.53,
+            1.25,
+            2.08,
+            2.29,
+            6
+          ],
+          blink_period: 4.74,
+          blink_phase: 0.22,
+          size: 32,
+          peak: 0.7,
+          blur: 2,
+          depth: 0.6
+        },
+        {
+          lantern: "far_left",
+          ax: 444,
+          ay: 537,
+          amp_x: 41,
+          amp_y: 23,
+          speed: 0.291,
+          phase: [
+            1.28,
+            5.26,
+            6.21,
+            0.19,
+            4.62,
+            5.46
+          ],
+          blink_period: 6.28,
+          blink_phase: 0.22,
+          size: 22,
+          peak: 0.45,
+          blur: 5,
+          depth: 0.35
+        },
+        {
+          lantern: "far_right",
+          ax: 1666,
+          ay: 551,
+          amp_x: 28,
+          amp_y: 21,
+          speed: 0.264,
+          phase: [
+            0.26,
+            2.11,
+            2.1,
+            2.49,
+            4.06,
+            5.25
+          ],
+          blink_period: 7.36,
+          blink_phase: 0.98,
+          size: 22,
+          peak: 0.45,
+          blur: 5,
+          depth: 0.35
+        },
+        {
+          lantern: "near_right",
+          ax: 1720,
+          ay: 595,
+          amp_x: 51,
+          amp_y: 27,
+          speed: 0.345,
+          phase: [
+            3.43,
+            4.24,
+            0.59,
+            1.21,
+            5.79,
+            3.78
+          ],
+          blink_period: 6.43,
+          blink_phase: 0.1,
+          size: 32,
+          peak: 0.7,
+          blur: 2,
+          depth: 0.6
+        },
+        {
+          lantern: "near_right",
+          ax: 1931,
+          ay: 363,
+          amp_x: 61,
+          amp_y: 42,
+          speed: 0.259,
+          phase: [
+            2.86,
+            5.03,
+            2.79,
+            4.96,
+            3.53,
+            0.74
+          ],
+          blink_period: 4.35,
+          blink_phase: 0.98,
+          size: 32,
+          peak: 0.7,
+          blur: 2,
+          depth: 0.6
+        }
+      ]
+    }
+  };
+
+  // src/config.ts
+  function circle(n = 48) {
+    return Array.from({ length: n + 1 }, (_, i) => {
+      const a = -Math.PI / 2 + i / n * Math.PI * 2;
+      return { x: 50 + Math.cos(a) * 34, y: 50 + Math.sin(a) * 34 };
+    });
+  }
+  function heart(n = 64) {
+    return Array.from({ length: n + 1 }, (_, i) => {
+      const t = i / n * Math.PI * 2;
+      const x = 16 * Math.sin(t) ** 3;
+      const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+      return { x: 50 + x * 2.55, y: 50 + (-y - 2.5) * 2.55 };
+    });
+  }
+  var P = (pts) => pts.map(([x, y]) => ({ x, y }));
+  var SYMBOLS = {
+    dash: { name: "Dash", color: "#ff6f91", glyph: P([[16, 50], [84, 50]]) },
+    pillar: { name: "Pillar", color: "#6fd6ff", glyph: P([[50, 16], [50, 84]]) },
+    fang: { name: "V", color: "#ff8a2b", glyph: P([[20, 22], [50, 80], [80, 22]]) },
+    roof: { name: "Roof", color: "#8fe36b", glyph: P([[20, 78], [50, 20], [80, 78]]) },
+    moon: { name: "Moon", color: "#c7b3ff", glyph: circle() },
+    bolt: { name: "Bolt", color: "#ffd36b", glyph: P([[64, 10], [32, 52], [66, 48], [36, 90]]) },
+    heart: { name: "Heart", color: "#ff3b4e", glyph: heart() }
+  };
+  var GHOST = {
+    /** body width as a fraction of the 16:9 frame width; each extra symbol makes it a little bigger */
+    size: 0.09,
+    perSymbol: 0.1,
+    /** the big one: same ghost, scaled up, a long row of symbols */
+    big: 1.7,
+    /** approach speed in frame widths per second, before difficulty */
+    speed: 0.056,
+    /** how close (frame widths, centre to lantern) counts as reaching you */
+    reach: 0.085,
+    /** a hit's shove away from you, in frame widths per second: about a quarter of a body width all told */
+    knockback: 0.04
+  };
+
+  // src/game/ghost.ts
+  var SLICES = 30;
+  var FREEZE = 0.13;
+  var FADE = 0.24;
+  var BOO = 0.5;
+  var HIT = 0.38;
+  var BLINK = 0.12;
+  var rnd = (a, b) => a + Math.random() * (b - a);
+  var clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  var smooth = (a, b, v) => {
+    const q = clamp((v - a) / (b - a), 0, 1);
+    return q * q * (3 - 2 * q);
+  };
+  var outBack = (q) => 1 + 2.4 * (q - 1) ** 3 + 1.4 * (q - 1) ** 2;
+  var outCubic = (q) => 1 - (1 - q) ** 3;
+  var scratch = null;
+  function scratchFor(w, h) {
+    if (!scratch) scratch = document.createElement("canvas");
+    if (scratch.width < w || scratch.height < h) {
+      scratch.width = Math.max(scratch.width, w);
+      scratch.height = Math.max(scratch.height, h);
+    }
+    return scratch;
+  }
+  var Ghost = class {
+    constructor(queue, w, scale = 1, at) {
+      this.scale = scale;
+      this.slots = queue.map((id, i) => ({ id, x: i }));
+      this.rowC = (queue.length - 1) / 2;
+      this.max = queue.length;
+      this.born = w.t;
+      this.nextBlink = w.t + rnd(1, 3.5);
+      if (at) {
+        this.x = at.x;
+        this.y = at.y;
+      } else {
+        const a = Math.PI + 0.3 + Math.random() * (Math.PI - 0.6);
+        this.x = w.W * 0.5 + Math.cos(a) * w.W * 0.64;
+        this.y = w.ty + Math.sin(a) * w.H * 0.98;
+      }
+      this.d0 = Math.max(w.U * 0.3, Math.hypot(this.x - w.tx, this.y - w.ty));
+    }
+    x = 0;
+    y = 0;
+    vx = 0;
+    vy = 0;
+    lean = 0;
+    /** squash spring: positive is wide and short */
+    sq = 0;
+    sqv = 0;
+    ph = rnd(0, 6.28);
+    ph2 = rnd(0, 6.28);
+    pace = rnd(0.88, 1.12);
+    born;
+    hitT = -9;
+    deadT = 0;
+    d0 = 1;
+    blinkT = -9;
+    nextBlink;
+    state = "live";
+    slots;
+    /** the row's centre, eased so the row slides when a symbol comes off */
+    rowC;
+    max;
+    /** hover around this point instead of approaching (tutorial, title screen) */
+    home = null;
+    burst = false;
+    get live() {
+      return this.state === "live";
+    }
+    get front() {
+      return this.slots[0]?.id;
+    }
+    get queue() {
+      return this.slots.map((s) => s.id);
+    }
+    /** Take the front symbol off. Returns where its glyph was drawn, so the effect can pick it up from there. */
+    strip(w, art) {
+      const at = this.glyphAt(w, art, 0);
+      const s = this.slots.shift();
+      if (!s) return null;
+      for (const o of this.slots) o.x -= 1;
+      this.rowC -= 1;
+      return { id: s.id, ...at };
+    }
+    /** It lost a symbol but is still here: flinch back, squash, flash. */
+    flinch(w) {
+      this.hitT = w.t;
+      this.sqv += 5.5;
+      const dx = this.x - w.tx, dy = this.y - w.ty, d = Math.hypot(dx, dy) || 1;
+      this.vx += dx / d * w.U * GHOST.knockback;
+      this.vy += dy / d * w.U * GHOST.knockback;
+    }
+    banish(w) {
+      this.state = "dying";
+      this.deadT = w.t;
+      this.hitT = w.t;
+      this.slots = [];
+      this.sqv += 6;
+    }
+    update(w) {
+      const t = w.t, dt = w.dt, U = w.U, age = t - this.born, since = t - this.deadT;
+      let event = null;
+      if (this.state === "live") {
+        let vx, vy;
+        if (this.home) {
+          const hx = this.home.x + Math.sin(t * 0.55 + this.ph) * U * 0.012, hy = this.home.y + Math.sin(t * 0.8 + this.ph2) * U * 6e-3;
+          vx = (hx - this.x) * 2.4;
+          vy = (hy - this.y) * 2.4;
+        } else {
+          let dx = w.tx - this.x, dy = w.ty - this.y;
+          const d = Math.hypot(dx, dy) || 1;
+          dx /= d;
+          dy /= d;
+          const sp = GHOST.speed * U * w.speed * this.pace * smooth(0, 1.5, age) / Math.sqrt(this.scale);
+          const lat = U * 0.03 * Math.sin(t * 0.62 + this.ph) * Math.min(1, d / (U * 0.3));
+          vx = dx * sp - dy * lat;
+          vy = dy * sp + dx * lat;
+          if (d < U * GHOST.reach * Math.sqrt(this.scale)) {
+            this.state = "boo";
+            this.deadT = t;
+            this.sqv -= 3;
+            event = "reached";
+          }
+        }
+        const mine = this.box(w).w;
+        for (const o of w.ghosts) {
+          if (o === this || !o.live) continue;
+          const ox = this.x - o.x, oy = (this.y - o.y) * 0.75, od = Math.hypot(ox, oy), min = (mine + o.box(w).w) * 0.62;
+          if (od < min && od > 0) {
+            const f = (min - od) / min * U * (o.scale > this.scale ? 1.1 : 0.6);
+            vx += ox / od * f;
+            vy += oy / od * f;
+          }
+        }
+        const k = Math.min(1, (this.home ? 3 : 1.6) * dt);
+        this.vx += (vx - this.vx) * k;
+        this.vy += (vy - this.vy) * k;
+        if (t > this.nextBlink) {
+          this.blinkT = t;
+          this.nextBlink = t + rnd(2, 5);
+        }
+      } else if (this.state === "dying") {
+        this.vx *= Math.max(0, 1 - dt * 14);
+        this.vy *= Math.max(0, 1 - dt * 14);
+        if (since > FREEZE && !this.burst) {
+          this.burst = true;
+          event = "burst";
+        }
+        if (since > FREEZE + FADE) {
+          this.state = "gone";
+          return "remove";
+        }
+      } else if (this.state === "boo") {
+        this.vx *= Math.max(0, 1 - dt * 6);
+        this.vy *= Math.max(0, 1 - dt * 6);
+        if (since > BOO) {
+          this.state = "gone";
+          return "remove";
+        }
+      }
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      const leanT = clamp(this.vx / U * 2.4, -0.24, 0.24) + Math.sin(t * 0.8 + this.ph) * 0.025;
+      this.lean += (leanT - this.lean) * Math.min(1, dt * 5);
+      this.sqv += (-this.sq * 150 - this.sqv * 10) * Math.min(dt, 0.033);
+      this.sq += this.sqv * Math.min(dt, 0.033);
+      for (const [i, s] of this.slots.entries()) s.x += (i - s.x) * Math.min(1, dt * 14);
+      this.rowC += ((this.slots.length - 1) / 2 - this.rowC) * Math.min(1, dt * 14);
+      return event;
+    }
+    /** on-screen body width and centre */
+    box(w) {
+      const near = this.home ? 0.4 : 1 - Math.min(1, Math.hypot(this.x - w.tx, this.y - w.ty) / this.d0);
+      const n = Math.min(this.max, 3);
+      const size = GHOST.size * w.U * this.scale * (1 + GHOST.perSymbol * (n - 1)) * (0.8 + 0.36 * near);
+      return { x: this.x, y: this.y, w: size };
+    }
+    /** everything that shapes the drawn body this frame */
+    pose(w) {
+      const t = w.t, age = t - this.born, since = t - this.deadT;
+      let alpha = 1, s = 1, jx = 0, flash = 0, face = "idle";
+      const bob = Math.sin(t * 1.7 + this.ph) * w.U * 6e-3 * this.scale;
+      let sx = 1 + this.sq - Math.cos(t * 1.7 + this.ph) * 0.018, sy = 1 - this.sq * 0.9 + Math.cos(t * 1.7 + this.ph) * 0.022;
+      if (age < 0.6) {
+        const q = age / 0.6;
+        alpha = Math.min(1, q * 1.6);
+        s *= 0.5 + 0.5 * outBack(q);
+      }
+      if (this.state === "live") {
+        const ht = t - this.hitT;
+        face = ht < HIT ? "hit" : t - this.blinkT < BLINK ? "blink" : "idle";
+        flash = Math.max(0, 1 - ht / 0.2) * 0.8;
+      } else if (this.state === "dying") {
+        face = "ouch";
+        if (since < FREEZE) {
+          const q = since / FREEZE;
+          jx = Math.sin(since * 110) * w.U * 45e-4 * (1 - q);
+          flash = 0.85 * (1 - q);
+          s *= 1.05;
+        } else {
+          const q = Math.min(1, (since - FREEZE) / FADE);
+          alpha = 1 - q * q;
+          s *= 1.05 + 0.25 * outCubic(q);
+          sy *= 1 + 0.14 * q;
+          sx *= 1 - 0.06 * q;
+        }
+      } else if (this.state === "boo") {
+        const q = Math.min(1, since / BOO);
+        face = "boo";
+        s *= 1 + 0.6 * outCubic(q);
+        alpha = q < 0.45 ? 1 : 1 - (q - 0.45) / 0.55;
+      }
+      return { alpha, s, sx, sy, jx, bob, flash, face };
+    }
+    /** The hem's sideways offset at height v (0 top, 1 bottom), as a fraction of the body width. */
+    wave(v, t, U) {
+      const tail = smooth(0.42, 1, v);
+      const drift = clamp(this.vx / U, -0.35, 0.35);
+      return tail * (0.026 * Math.sin(t * 3 + this.ph - v * 5.5) + 0.01 * Math.sin(t * 5.1 + this.ph2 - v * 9)) - tail * tail * drift * 0.5;
+    }
+    draw(ctx, w, art, dpr) {
+      if (this.state === "gone") return;
+      const r = art.rig, p = this.pose(w);
+      if (p.alpha <= 0) return;
+      const W0 = this.box(w).w * p.s, H0 = W0 * r.aspect;
+      const k = Math.min(1, W0 * dpr * Math.max(p.sx, 1) / r.body.width);
+      const sw = Math.ceil(r.body.width * k), sh = Math.ceil(r.body.height * k), m = Math.ceil(sw * 0.12);
+      const c = scratchFor(sw + m * 2, sh), g = c.getContext("2d");
+      g.clearRect(0, 0, c.width, c.height);
+      for (let i = 0; i < SLICES; i++) {
+        const y0 = Math.round(i / SLICES * sh), y1 = Math.round((i + 1) / SLICES * sh);
+        const off = m + this.wave((y0 + y1) / 2 / sh, w.t, w.U) * sw;
+        const sy0 = y0 / sh * r.body.height, sy1 = y1 / sh * r.body.height;
+        g.drawImage(r.body, 0, sy0, r.body.width, sy1 - sy0, off, y0, sw, y1 - y0);
+        if (p.flash > 0.02) {
+          g.globalAlpha = p.flash;
+          g.drawImage(r.flash, 0, sy0, r.body.width, sy1 - sy0, off, y0, sw, y1 - y0);
+          g.globalAlpha = 1;
+        }
+      }
+      const dx = w.tx - this.x, dy = w.ty - this.y, d = Math.hypot(dx, dy) || 1;
+      const lx = dx / d * sw * 0.028, ly = dy / d * sw * 0.016;
+      g.drawImage(r.faces[p.face], m + this.wave(0.32, w.t, w.U) * sw + lx, ly, sw, sh);
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+      ctx.translate(this.x + p.jx, this.y + p.bob);
+      ctx.rotate(this.lean);
+      ctx.scale(p.sx, p.sy);
+      const mw = m / sw * W0;
+      ctx.drawImage(c, 0, 0, sw + m * 2, sh, -W0 / 2 - mw, -H0 / 2, W0 + mw * 2, H0);
+      ctx.restore();
+    }
+    /** where glyph i of the row sits on screen, and its size */
+    glyphAt(w, art, i) {
+      const p = this.pose(w), b = this.box(w), W0 = b.w * p.s, H0 = W0 * art.rig.aspect;
+      const g = w.U * 0.058 * Math.max(0.9, Math.min(1.2, W0 / (GHOST.size * w.U))) * (this.scale > 1 ? 1.1 : 1);
+      const top = this.y + p.bob - H0 / 2 * p.sy + art.rig.pad * W0;
+      const slot = this.slots[i];
+      const x = this.x + ((slot?.x ?? i) - this.rowC) * g * 0.86;
+      const y = Math.max(Math.max(w.U * 0.045, 72) + g * 0.5, top - g * 0.5);
+      return { x, y, size: i === 0 ? g * 1.12 : g };
+    }
+    /** The symbol row, drawn on the top layer so nothing ever covers it. */
+    drawSymbols(ctx, w, art) {
+      if (!this.live || !this.slots.length) return;
+      const age = w.t - this.born, alpha = Math.min(1, age / 0.35);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      for (let i = this.slots.length - 1; i >= 0; i--) {
+        const at = this.glyphAt(w, art, i), s = at.size * (age < 0.45 ? 0.6 + 0.4 * outBack(age / 0.45) : 1);
+        ctx.globalAlpha = alpha * (i === 0 ? 1 : 0.92);
+        ctx.drawImage(art.glyphs[this.slots[i].id], at.x - s / 2, at.y - s / 2, s, s);
+      }
+      ctx.restore();
+    }
+  };
+
+  // src/render/sprites.ts
+  var FACES = ["idle", "blink", "hit", "ouch", "boo"];
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
+      const im = new Image();
+      im.decoding = "async";
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error(`Could not load ${url}`));
+      im.src = url;
+    });
+  }
+
+  // reference/generated/ghost/states-src/states.ts
+  var M = manifest_default;
+  var BG = "../v6b_layers/";
+  var RIG = "rig/";
+  var SYM = "symbols/";
+  var SYMBOL_IDS = Object.keys(SYMBOLS);
+  var RIG_PAD = 24;
+  var CAST = ["dash", "pillar", "fang", "roof"];
+  var HIT_FACE = 0.38;
+  var rnd2 = (a, b) => a + Math.random() * (b - a);
+  var pick = (a) => a[Math.floor(Math.random() * a.length)];
+  var clamp2 = (v, a, b) => Math.max(a, Math.min(b, v));
+  var smooth2 = (a, b, v) => {
+    const q = clamp2((v - a) / (b - a), 0, 1);
+    return q * q * (3 - 2 * q);
+  };
+  var outCubic2 = (q) => 1 - (1 - q) ** 3;
+  var lerp = (a, b, q) => a + (b - a) * q;
+  var $ = (id) => document.getElementById(id);
+  var items = [];
+  for (const L of M.layers) {
+    if (L.lanterns) M.lanterns.forEach((l) => items.push({ ...l, sprite: true }));
+    else items.push({ ...L });
+  }
+  function bake(it, img) {
+    const pad = Math.ceil((it.blur ?? 0) * 3), br = it.brightness ?? 1;
+    const c = document.createElement("canvas");
+    c.width = img.width + pad * 2;
+    c.height = img.height + pad * 2;
+    const g = c.getContext("2d");
+    g.filter = `${it.blur ? `blur(${it.blur}px) ` : ""}brightness(${br})`;
+    g.drawImage(img, pad, pad);
+    g.filter = "none";
+    if (it.haze && it.haze_rgb) {
+      const [r, gg, b] = it.haze_rgb;
+      g.globalCompositeOperation = "source-atop";
+      g.fillStyle = `rgba(${r * br | 0},${gg * br | 0},${b * br | 0},${it.haze})`;
+      g.fillRect(0, 0, c.width, c.height);
+    }
+    it.c = c;
+    it.pad = pad;
+  }
+  function flicker(t, seed) {
+    return 0.82 + 0.1 * Math.sin(t * 7.1 + seed) + 0.05 * Math.sin(t * 13.7 + seed * 2.3) + 0.03 * Math.sin(t * 31.3 + seed * 5.1);
+  }
+  function sceneFit(W, H) {
+    const [CW, CH] = M.canvas, s = Math.max(W / CW, H / CH) * 1.05;
+    return { s, ox: (W - CW * s) / 2, oy: (H - CH * s) / 2 };
+  }
+  function drawScene(ctx, W, H, dpr, t, glow, fly, after) {
+    const { s, ox, oy } = sceneFit(W, H);
+    items.forEach((it, i) => {
+      const px = Math.sin(t * 0.15) * 8 * (it.depth ?? 0);
+      ctx.setTransform(s * dpr, 0, 0, s * dpr, (ox + px * s) * dpr, oy * dpr);
+      ctx.globalAlpha = it.opacity ?? 1;
+      ctx.globalCompositeOperation = it.blend === "screen" ? "screen" : "source-over";
+      ctx.drawImage(it.c, (it.x ?? 0) - it.pad, (it.y ?? 0) - it.pad);
+      if (it.sprite) {
+        const f = flicker(t, it.x * 0.013), r = it.glow_radius * (0.95 + 0.08 * f);
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = 0.55 * f;
+        ctx.drawImage(glow, it.glow_x - r, it.glow_y - r, r * 2, r * 2);
+        ctx.globalAlpha = 0.35 * f;
+        ctx.drawImage(glow, it.glow_x - r * 2.2, it.glow_y - r * 2.2, r * 4.4, r * 4.4);
+        for (const q of M.fireflies.list) {
+          if (q.lantern !== it.name) continue;
+          const c = ((t / q.blink_period + q.blink_phase) % 1 + 1) % 1;
+          if (c >= 0.4) continue;
+          const p = q.phase, w = q.speed, soft = 1 + q.blur * 0.12, sz = q.size * soft;
+          const x = q.ax + q.amp_x * (0.65 * Math.sin(w * t + p[0]) + 0.35 * Math.sin(2.3 * w * t + p[1])) + 1.2 * Math.sin(5.1 * t + p[2]);
+          const y = q.ay + q.amp_y * (0.6 * Math.sin(0.8 * w * t + p[3]) + 0.4 * Math.sin(1.9 * w * t + p[4])) + Math.sin(4.3 * t + p[5]);
+          ctx.globalAlpha = q.peak * Math.sin(Math.PI * c / 0.4) ** 2 / soft;
+          ctx.drawImage(fly, x - sz / 2, y - sz / 2, sz, sz);
+        }
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+      after(i);
+    });
+  }
+  var DIE = { freeze: 0.12, squash: 0.08, fade: 0.32, puff: 0.6 };
+  var POP = DIE.freeze + DIE.squash;
+  var DIE_T = POP + DIE.puff;
+  var FeltGhost = class _FeltGhost extends Ghost {
+    /** the body with the X-eyes face, composed once */
+    static ouch;
+    static puffImgs;
+    puffs = null;
+    /** 1 as drawn (tail trailing right, so heading left), -1 mirrored (heading right); eases through 0 to turn */
+    facing = 1;
+    faceTo = 1;
+    constructor(queue, w, scale = 1, at) {
+      super(queue, w, scale, at);
+      this.facing = this.faceTo = this.x < w.tx ? -1 : 1;
+    }
+    /** a fan of wisps thrown mostly upward; each tail trails behind its flight */
+    makePuffs() {
+      return _FeltGhost.puffImgs.map((img, i) => {
+        const a = -Math.PI / 2 + (i - 1.5) * 0.8 + rnd2(-0.2, 0.2);
+        return {
+          img,
+          a,
+          dist: rnd2(0.55, 0.8),
+          size: i === 0 ? 0.7 : rnd2(0.48, 0.58),
+          rot: rnd2(-0.5, 0.5),
+          vr: rnd2(-1.2, 1.2),
+          flip: Math.cos(a) > 0 ? -1 : 1,
+          life: rnd2(0.48, DIE.puff)
+        };
+      });
+    }
+    update(w) {
+      if (this.state === "live") {
+        const dx = w.tx - this.x, m = this.box(w).w * 0.4;
+        if (dx > m) this.faceTo = -1;
+        else if (dx < -m) this.faceTo = 1;
+      }
+      this.facing += (this.faceTo - this.facing) * Math.min(1, w.dt * 9);
+      if (this.state !== "dying") return super.update(w);
+      const k = Math.max(0, 1 - w.dt * 14);
+      this.vx *= k;
+      this.vy *= k;
+      this.x += this.vx * w.dt;
+      this.y += this.vy * w.dt;
+      if (w.t - this.deadT > DIE_T) {
+        this.state = "gone";
+        return "remove";
+      }
+      return null;
+    }
+    draw(ctx, w, art, dpr) {
+      const f = this.facing, flip = f < 0, vx = this.vx, lean = this.lean, tx = w.tx;
+      if (flip) {
+        this.vx = -vx;
+        this.lean = -lean;
+        w.tx = 2 * this.x - tx;
+      }
+      ctx.save();
+      ctx.translate(this.x, 0);
+      ctx.scale(flip ? Math.min(-0.04, f) : Math.max(0.04, f), 1);
+      ctx.translate(-this.x, 0);
+      if (this.state === "dying") this.drawDeath(ctx, w, art, dpr);
+      else super.draw(ctx, w, art, dpr);
+      ctx.restore();
+      if (flip) {
+        this.vx = vx;
+        this.lean = lean;
+        w.tx = tx;
+      }
+    }
+    /** The felt symbols fill less of their square than the printed glyphs ghost.ts spaces for, so the row is pulled
+        in tighter and down closer to the head. */
+    glyphAt(w, art, i) {
+      const at = super.glyphAt(w, art, i), g = i === 0 ? at.size / 1.12 : at.size;
+      return { ...at, x: this.x + (at.x - this.x) * 0.72, y: at.y + g * 0.2 };
+    }
+    drawDeath(ctx, w, art, dpr) {
+      const since = w.t - this.deadT, W0 = this.box(w).w, H0 = W0 * art.rig.aspect;
+      const bob = Math.sin(this.deadT * 1.7 + this.ph) * w.U * 6e-3 * this.scale, cx = this.x, cy = this.y + bob;
+      let sx = 1, sy = 1, jx = 0, rise = 0, alpha = 1, blur = 0, bright = 1;
+      if (since < DIE.freeze) {
+        const q = since / DIE.freeze;
+        jx = Math.sin(since * 120) * W0 * 0.025 * (1 - q);
+        sx = sy = 1 + 0.07 * Math.sin(Math.PI * q);
+        bright = 1 + 0.3 * (1 - q);
+      } else if (since < POP) {
+        const e = smooth2(0, 1, (since - DIE.freeze) / DIE.squash);
+        sx = 1 + 0.2 * e;
+        sy = 1 - 0.2 * e;
+      } else {
+        const q = Math.min(1, (since - POP) / DIE.fade), k = outCubic2(Math.min(1, q / 0.3));
+        sx = lerp(1.2, 0.86, k);
+        sy = lerp(0.8, 1.2, k);
+        rise = H0 * 0.12 * outCubic2(q);
+        alpha = 1 - smooth2(0, 1, q);
+        blur = W0 * 0.03 * q;
+      }
+      const tp = since - POP;
+      if (tp > 0) for (const p of this.puffs ??= this.makePuffs()) {
+        const q = tp / p.life;
+        if (q >= 1) continue;
+        const e = outCubic2(q), d = W0 * (0.28 + p.dist * e);
+        const x = cx + Math.cos(p.a) * d, y = cy + Math.sin(p.a) * d - W0 * 0.35 * q * q;
+        const s = W0 * p.size * lerp(0.55, 1, outCubic2(Math.min(1, q / 0.12))) * (1 - 0.7 * q), ar = p.img.height / p.img.width;
+        ctx.save();
+        ctx.globalAlpha = 1 - q * q;
+        ctx.translate(x, y);
+        ctx.rotate(p.rot + p.vr * q);
+        ctx.scale(p.flip, 1);
+        ctx.drawImage(p.img, -s / 2, -s * ar / 2, s, s * ar);
+        ctx.restore();
+      }
+      if (alpha > 0.01) {
+        ctx.save();
+        ctx.translate(cx + jx, cy + H0 * (1 - sy) / 2 - rise);
+        ctx.rotate(this.lean);
+        ctx.scale(sx, sy);
+        ctx.globalAlpha = alpha;
+        const f = [blur > 0.3 ? `blur(${blur * dpr}px)` : "", bright !== 1 ? `brightness(${bright})` : ""].join(" ").trim();
+        if (f) ctx.filter = f;
+        ctx.drawImage(_FeltGhost.ouch, -W0 / 2, -H0 / 2, W0, H0);
+        ctx.restore();
+      }
+    }
+  };
+  var GlyphPops = class {
+    list = [];
+    add(img, x, y, size) {
+      this.list.push({ img, x, y, size, age: 0 });
+    }
+    update(dt) {
+      for (const g of this.list) g.age += dt;
+      this.list = this.list.filter((g) => g.age < 0.3);
+    }
+    draw(ctx) {
+      for (const g of this.list) {
+        const q = g.age / 0.3, s = g.size * (1 + 0.8 * outCubic2(q));
+        ctx.globalAlpha = (1 - q) ** 1.5;
+        ctx.drawImage(g.img, g.x - s / 2, g.y - s / 2, s, s);
+      }
+      ctx.globalAlpha = 1;
+    }
+  };
+  var HOLDS = [
+    ["spawn", "SPAWN", "pops in, symbols first"],
+    ["approach", "APPROACH", "drifts at you, smug"],
+    ["blink", "BLINK", "idle blink"],
+    ["hit", "HIT", "loses a symbol: flinch"],
+    ["banish", "BANISH", "last symbol: X eyes, freeze"],
+    ["poof", "POOF", "bursts into felt wisps"],
+    ["boo", "BOO", "reached you, then gone"]
+  ];
+  var QUEUES = {
+    spawn: ["dash", "roof"],
+    approach: ["fang", "dash", "pillar"],
+    blink: ["roof", "pillar"],
+    hit: ["pillar"],
+    banish: [],
+    poof: [],
+    boo: ["dash"]
+  };
+  function hold(g, h, t) {
+    g.nextBlink = Infinity;
+    g.born = h === "spawn" ? t - 0.15 : t - 10;
+    if (h === "blink") g.blinkT = t;
+    if (h === "hit") {
+      g.hitT = t - 0.14;
+      g.sq = 0.06;
+    }
+    if (h === "banish") {
+      g.state = "dying";
+      g.deadT = t - 0.05;
+    }
+    if (h === "poof") {
+      g.state = "dying";
+      g.deadT = t - (POP + 0.14);
+    }
+    if (h === "boo") {
+      g.state = "boo";
+      g.deadT = t - 0.14;
+    }
+  }
+  function stateOf(g, t) {
+    if (g.state === "dying") return t - g.deadT < DIE.freeze ? "BANISH" : "POOF";
+    if (g.state === "boo") return "BOO";
+    if (t - g.born < 0.6) return "SPAWN";
+    if (t - g.hitT < HIT_FACE) return "HIT";
+    return "APPROACH";
+  }
+  function pill(ctx, x, y, title, sub) {
+    ctx.font = "700 12px system-ui, sans-serif";
+    const tw = ctx.measureText(title).width;
+    ctx.font = "12px system-ui, sans-serif";
+    const sw = sub ? ctx.measureText(sub).width : 0, w = Math.max(tw, sw) + 18, h = sub ? 38 : 22;
+    ctx.fillStyle = "rgba(11, 10, 31, .62)";
+    ctx.beginPath();
+    ctx.roundRect(x - w / 2, y, w, h, 8);
+    ctx.fill();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "700 12px system-ui, sans-serif";
+    ctx.fillStyle = "#e9e4ff";
+    ctx.fillText(title, x, y + 11);
+    if (sub) {
+      ctx.font = "12px system-ui, sans-serif";
+      ctx.fillStyle = "#a9a3d8";
+      ctx.fillText(sub, x, y + 27);
+    }
+  }
+  function toCanvas(img, w, h) {
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    c.getContext("2d").drawImage(img, 0, 0, w, h);
+    return c;
+  }
+  async function boot() {
+    const cv = $("c"), ctx = cv.getContext("2d");
+    const [glow, fly, bodyImg, ...rest] = await Promise.all([
+      loadImage(BG + "lanterns/glow.png"),
+      loadImage(BG + M.fireflies.file),
+      loadImage(RIG + "body.webp"),
+      ...FACES.map((f) => loadImage(`${RIG}face-${f}.webp`)),
+      ...[1, 2, 3, 4].map((i) => loadImage(`${RIG}puff-${i}.webp`)),
+      ...SYMBOL_IDS.map((id) => loadImage(`${SYM}${id}.webp`)),
+      ...items.map((it) => loadImage(BG + it.file))
+    ]);
+    const faceImgs = rest.slice(0, FACES.length), puffImgs = rest.slice(FACES.length, FACES.length + 4);
+    const symImgs = rest.slice(FACES.length + 4, FACES.length + 4 + SYMBOL_IDS.length);
+    rest.slice(FACES.length + 4 + SYMBOL_IDS.length).forEach((im, i) => bake(items[i], im));
+    const bw = bodyImg.naturalWidth, bh = bodyImg.naturalHeight;
+    const body = toCanvas(bodyImg, bw, bh), flash = toCanvas(bodyImg, bw, bh), fg = flash.getContext("2d");
+    fg.globalCompositeOperation = "source-in";
+    fg.fillStyle = "#ffffff";
+    fg.fillRect(0, 0, bw, bh);
+    const rig = {
+      body,
+      flash,
+      aspect: bh / bw,
+      pad: RIG_PAD / bw,
+      dust: [],
+      faces: Object.fromEntries(FACES.map((f, i) => [f, toCanvas(faceImgs[i], bw, bh)]))
+    };
+    FeltGhost.ouch = toCanvas(body, bw, bh);
+    FeltGhost.ouch.getContext("2d").drawImage(rig.faces.ouch, 0, 0);
+    FeltGhost.puffImgs = puffImgs;
+    const glyphs = Object.fromEntries(SYMBOL_IDS.map((id, i) => [id, toCanvas(symImgs[i], symImgs[i].naturalWidth, symImgs[i].naturalHeight)]));
+    const art = { rig, glyphs, lantern: glow };
+    const w = { W: 0, H: 0, U: 0, tx: 0, ty: 0, t: 0, dt: 0, speed: 1.1, ghosts: [] };
+    const pops = new GlyphPops(), spared = /* @__PURE__ */ new WeakSet();
+    const qs = new URLSearchParams(location.search);
+    let mode = "live", held = [];
+    let clock = 0, stopUntil = 0, hurtT = -9, nextSpawn = 0.3, nextCast = 2;
+    const SLOTS = ["far", "mid", "near", "top"];
+    const after = (name) => items.findIndex((it) => it.file.includes(name));
+    const SLOT_AFTER = { far: after("05_trees_mid"), mid: after("07_graves_back"), near: after("09_graves_front"), top: items.length - 1 };
+    const HAZE = [90, 86, 210];
+    const sprites = /* @__PURE__ */ new WeakMap(), mask = document.createElement("canvas");
+    const progress = (g) => g.home ? 1 : clamp2(1 - Math.hypot(g.x - w.tx, g.y - w.ty) / g.d0, 0, 1);
+    function weights(g, n) {
+      if (g.state === "boo") return { far: 0, mid: 0, near: 0, top: 1 };
+      const k1 = smooth2(0.27, 0.37, n), k2 = smooth2(0.58, 0.68, n);
+      return { far: 1 - k1, mid: k1 * (1 - k2), near: k2, top: 0 };
+    }
+    function shoot(g, dpr, fit) {
+      const W0 = g.box(w).w, n = progress(g), z = 1 - n;
+      const [hw, up, down] = g.state === "dying" ? [1.7, 2.4, 1.1] : g.state === "boo" ? [1.4, 1.5, 1.3] : [1.1, 1.05, 1];
+      const x = g.x - W0 * hw, y = g.y - W0 * up, cw = Math.ceil(W0 * hw * 2 * dpr), ch = Math.ceil(W0 * (up + down) * dpr);
+      let c = sprites.get(g);
+      if (!c) {
+        c = document.createElement("canvas");
+        sprites.set(g, c);
+      }
+      if (c.width < cw || c.height < ch) {
+        c.width = Math.max(c.width, cw);
+        c.height = Math.max(c.height, ch);
+      }
+      const s = c.getContext("2d");
+      s.setTransform(1, 0, 0, 1, 0, 0);
+      s.clearRect(0, 0, c.width, c.height);
+      s.setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr);
+      g.draw(s, w, art, dpr);
+      const lit = M.lanterns.filter((L) => Math.hypot(g.x - (fit.ox + L.glow_x * fit.s), g.y - (fit.oy + L.glow_y * fit.s)) < L.glow_radius * fit.s * 3.2 + W0);
+      if (lit.length) {
+        if (mask.width < cw || mask.height < ch) {
+          mask.width = Math.max(mask.width, cw);
+          mask.height = Math.max(mask.height, ch);
+        }
+        const m = mask.getContext("2d");
+        m.clearRect(0, 0, mask.width, mask.height);
+        m.drawImage(c, 0, 0);
+        s.globalCompositeOperation = "multiply";
+        for (const L of lit) {
+          const lx = fit.ox + L.glow_x * fit.s, ly = fit.oy + L.glow_y * fit.s, R = L.glow_radius * fit.s * 3.2;
+          const k = 0.5 * flicker(clock, L.x * 0.013), gr = s.createRadialGradient(lx, ly, 0, lx, ly, R);
+          gr.addColorStop(0, `rgba(255, 168, 92, ${k})`);
+          gr.addColorStop(1, "rgba(255, 168, 92, 0)");
+          s.fillStyle = gr;
+          s.fillRect(x, y, cw / dpr, ch / dpr);
+        }
+        s.setTransform(1, 0, 0, 1, 0, 0);
+        s.globalCompositeOperation = "destination-in";
+        s.drawImage(mask, 0, 0);
+        s.setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr);
+      }
+      s.globalCompositeOperation = "source-atop";
+      s.fillStyle = `rgba(${HAZE[0]}, ${HAZE[1]}, ${HAZE[2]}, ${0.05 + 0.17 * z})`;
+      s.fillRect(x, y, cw / dpr, ch / dpr);
+      s.globalCompositeOperation = "source-over";
+      return {
+        c,
+        x,
+        y,
+        cw,
+        ch,
+        wts: weights(g, n),
+        alpha: 0.96 - 0.12 * z,
+        blur: 2.4 * z * w.U / 1920,
+        bright: 0.97 - 0.13 * z,
+        // the glow sits on the live body; the boo and the poof go without it rather than leave it hanging
+        W0,
+        gx: g.x,
+        gy: g.y,
+        glow: g.live ? Math.min(1, (w.t - g.born) / 0.6) : 0
+      };
+    }
+    const hp = Math.round(bw * 0.35), halo = document.createElement("canvas");
+    halo.width = bw + hp * 2;
+    halo.height = bh + hp * 2;
+    const hg = halo.getContext("2d");
+    hg.filter = `blur(${bw * 0.1}px)`;
+    hg.drawImage(flash, hp, hp);
+    function paint(sh, wt, dpr) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = sh.alpha * wt;
+      ctx.filter = `${sh.blur > 0.25 ? `blur(${sh.blur * dpr}px) ` : ""}brightness(${sh.bright})`;
+      ctx.drawImage(sh.c, 0, 0, sh.cw, sh.ch, sh.x * dpr, sh.y * dpr, sh.cw, sh.ch);
+      ctx.filter = "none";
+      if (sh.glow > 0) {
+        const k = sh.W0 / bw, hw = halo.width * k, hh = halo.height * k;
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = 0.16 * sh.alpha * wt * sh.glow;
+        ctx.drawImage(halo, (sh.gx - hw / 2) * dpr, (sh.gy - hh / 2) * dpr, hw * dpr, hh * dpr);
+        ctx.globalCompositeOperation = "source-over";
+      }
+      ctx.globalAlpha = 1;
+    }
+    function resize() {
+      w.W = innerWidth;
+      w.H = innerHeight;
+      w.U = Math.min(w.W, w.H * 16 / 9);
+      w.tx = w.W * 0.5;
+      w.ty = w.H * 0.46;
+    }
+    const strip = qs.get("strip") === "death" ? [0.03, 0.1, 0.16, 0.22, 0.3, 0.4, 0.5, 0.62, 0.74] : null;
+    function lineup() {
+      w.ghosts = [];
+      pops.list = [];
+      if (strip) {
+        held = strip.map((since, i) => {
+          const x = w.W * (i + 0.5) / strip.length, y = w.H * 0.55;
+          const g = new FeltGhost([], w, 1, { x, y });
+          g.home = { x, y };
+          w.ghosts.push(g);
+          return { g, hold: "banish", x, y, since };
+        });
+        return;
+      }
+      held = HOLDS.map(([h], i) => {
+        const x = w.W * (i + 0.5) / HOLDS.length, y = w.H * 0.5;
+        const g = new FeltGhost(QUEUES[h], w, 1, { x, y });
+        g.home = { x, y };
+        w.ghosts.push(g);
+        return { g, hold: h, x, y };
+      });
+    }
+    function setMode(m) {
+      mode = m;
+      document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === m));
+      $("live-ui").hidden = m !== "live";
+      if (m === "lineup") lineup();
+      else {
+        w.ghosts = [];
+        pops.list = [];
+        nextSpawn = w.t + 0.3;
+        nextCast = w.t + 2;
+      }
+    }
+    function spawn() {
+      const n = Math.random() < 0.4 ? 1 : Math.random() < 0.6 ? 2 : 3, m = w.U * 0.07, r = Math.random();
+      const at = r < 0.2 ? { x: rnd2(0.2, 0.8) * w.W, y: w.H * 0.28 } : { x: r < 0.6 ? m : w.W - m, y: rnd2(0.28, 0.75) * w.H };
+      const g = new FeltGhost(Array.from({ length: n }, () => pick(CAST)), w, 1, at);
+      if (Math.random() < 0.25) spared.add(g);
+      w.ghosts.push(g);
+    }
+    function cast(id) {
+      if (mode !== "live") return;
+      let killed = 0;
+      for (const g of w.ghosts.filter((g2) => g2.live && g2.front === id)) {
+        const s = g.strip(w, art);
+        if (s) pops.add(art.glyphs[s.id], s.x, s.y, s.size);
+        if (g.slots.length) g.flinch(w);
+        else {
+          g.banish(w);
+          killed++;
+        }
+      }
+      if (killed) stopUntil = clock + (killed > 1 ? 0.09 : 0.055);
+    }
+    $("casts").innerHTML = CAST.map((id, i) => `<button data-cast="${id}" title="${SYMBOLS[id].name} (${i + 1})"><img src="${SYM}${id}.webp" alt=""><span>${i + 1}</span></button>`).join("");
+    document.querySelectorAll("[data-cast]").forEach((b) => {
+      b.onclick = () => cast(b.dataset.cast);
+    });
+    document.querySelectorAll("[data-mode]").forEach((b) => {
+      b.onclick = () => setMode(b.dataset.mode);
+    });
+    $("spawn").onclick = () => mode === "live" && spawn();
+    let paused = false;
+    addEventListener("keydown", (e) => {
+      const i = "1234".indexOf(e.key);
+      if (i >= 0) cast(CAST[i]);
+      if (e.key === "s" || e.key === "S") $("spawn").click();
+      if (e.key === " ") {
+        paused = !paused;
+        e.preventDefault();
+      }
+    });
+    const auto = $("auto"), slow = $("slow"), labels = $("labels");
+    addEventListener("resize", () => {
+      resize();
+      if (mode === "lineup") lineup();
+    });
+    resize();
+    if (qs.has("noui")) $("ui").hidden = true;
+    setMode(qs.get("mode") === "lineup" ? "lineup" : "live");
+    function step(dt) {
+      clock += dt;
+      w.dt = clock < stopUntil ? 0 : dt;
+      w.t += w.dt;
+      const t = w.t;
+      if (mode === "live") {
+        const alive = w.ghosts.filter((g) => g.live);
+        if (t > nextSpawn && alive.length < 5) {
+          spawn();
+          nextSpawn = t + rnd2(1.5, 2.6);
+        }
+        if (auto.checked && t > nextCast) {
+          nextCast = t + rnd2(0.9, 1.5);
+          const d = (g) => Math.hypot(g.x - w.tx, g.y - w.ty);
+          const ready = alive.filter((g) => t - g.born > 1.3 && g.front && !spared.has(g) && g.x > 0 && g.x < w.W && g.y > 0 && g.y < w.H).sort((a, b) => d(a) - d(b));
+          if (ready.length) cast(ready[0].front);
+        }
+      } else for (const h of held) {
+        if (h.since === void 0) hold(h.g, h.hold, t);
+        else {
+          h.g.state = "dying";
+          h.g.deadT = t - h.since;
+        }
+      }
+      for (let i = w.ghosts.length - 1; i >= 0; i--) {
+        const ev = w.ghosts[i].update(w);
+        if (ev === "reached") hurtT = clock;
+        else if (ev === "remove") w.ghosts.splice(i, 1);
+      }
+      pops.update(w.dt);
+    }
+    function render() {
+      const dpr = Math.min(devicePixelRatio || 1, 2), W = w.W, H = w.H, t = w.t;
+      if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) {
+        cv.width = Math.round(W * dpr);
+        cv.height = Math.round(H * dpr);
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = "#0b0a1f";
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      const order = [...w.ghosts].sort((a, b) => a.box(w).w - b.box(w).w);
+      const fit = sceneFit(W, H), shots = order.map((g) => shoot(g, dpr, fit));
+      drawScene(ctx, W, H, dpr, clock, glow, fly, (i) => {
+        for (const slot of SLOTS) if (SLOT_AFTER[slot] === i) {
+          for (const sh of shots) if (sh.wts[slot] > 0.01) paint(sh, sh.wts[slot], dpr);
+        }
+      });
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      for (const g of order) g.drawSymbols(ctx, w, art);
+      pops.draw(ctx);
+      if (mode === "lineup") {
+        if (strip) for (const h of held) pill(ctx, h.x, h.y + GHOST.size * w.U * 0.9, `${Math.round(h.since * 1e3)} ms`);
+        else for (const [i, [, title, sub]] of HOLDS.entries()) pill(ctx, held[i].x, held[i].y + GHOST.size * w.U * 0.7, title, sub);
+      } else if (labels.checked) {
+        for (const g of w.ghosts) if (g.state !== "gone") pill(ctx, g.x, g.y + g.box(w).w * rig.aspect * 0.55, stateOf(g, t));
+      }
+      const k = Math.max(0, 1 - (clock - hurtT) / 0.6);
+      if (k > 0) {
+        const gr = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
+        gr.addColorStop(0, "rgba(255, 90, 120, 0)");
+        gr.addColorStop(1, `rgba(255, 90, 120, ${0.35 * k})`);
+        ctx.fillStyle = gr;
+        ctx.fillRect(0, 0, W, H);
+      }
+      if (paused) pill(ctx, W / 2, 14, "PAUSED \xB7 space to resume");
+    }
+    const FIND = {
+      spawn: () => w.ghosts.some((g) => g.live && w.t - g.born > 0.2),
+      hit: () => w.ghosts.some((g) => g.live && w.t - g.hitT > 0.06 && w.t - g.hitT < 0.2),
+      banish: () => w.ghosts.some((g) => g.state === "dying" && w.t - g.deadT > 0.05),
+      poof: () => w.ghosts.some((g) => g.state === "dying" && w.t - g.deadT > POP + +(qs.get("at") ?? 0.14)),
+      boo: () => w.ghosts.some((g) => g.state === "boo" && w.t - g.deadT > 0.12),
+      far: () => w.ghosts.filter((g) => g.live && w.t - g.born > 0.8 && progress(g) < 0.25).length >= 2,
+      mid: () => w.ghosts.some((g) => g.live && progress(g) > 0.4 && progress(g) < 0.55)
+    };
+    const find = FIND[qs.get("find") ?? ""];
+    if (find && mode === "live") {
+      for (let i = 0; i < 60 * 120 && !find(); i++) step(1 / 60);
+      paused = true;
+    }
+    let last = performance.now();
+    function frame(now) {
+      let dt = Math.min(0.05, (now - last) / 1e3);
+      last = now;
+      if (slow.checked) dt *= 0.3;
+      if (!paused) step(dt);
+      render();
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+  boot().catch((e) => {
+    document.body.insertAdjacentHTML("beforeend", `<p style="position:fixed;bottom:8px;left:12px">${String(e.message ?? e)}</p>`);
+  });
+})();
+</script>
+</body>
+</html>

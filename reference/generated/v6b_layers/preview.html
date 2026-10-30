@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V6B Layer Preview</title>
+<style>
+  :root { --bg: #0b0a1f; --fg: #d9d6ff; --muted: #8f8bc4; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #ui { position: fixed; left: 12px; top: 12px; background: rgba(11, 10, 31, .72); padding: 10px 12px; border-radius: 8px; max-width: 260px; }
+  #ui label { display: flex; gap: 6px; align-items: center; margin: 2px 0; }
+  #ui .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div><b>v6b layers</b> <span class="muted">· move the mouse for parallax</span></div>
+  <label><input type="checkbox" id="parallax" checked> parallax</label>
+  <label><input type="checkbox" id="dof" checked> depth blur</label>
+  <label><input type="checkbox" id="glow" checked> live lantern glow</label>
+  <label><input type="checkbox" id="flies" checked> fireflies</label>
+  <div id="layers"></div>
+</div>
+<script>
+const M = {"source": "reference/generated/bg_v6b_misty_graveyard_eyelevel.png", "canvas": [2048, 1152], "notes": ["Every file in layers/ is a full-canvas 2048x1152 PNG already positioned; draw them in this order at (0,0).", "blur = gaussian sigma in canvas px (depth of field). haze = mix toward haze_rgb after blur, then multiply by brightness.", "blend \"screen\" layers are light (fog); draw with screen/additive at the given opacity.", "Lantern sprites go where the \"lanterns\" entry sits; x/y is the sprite top-left on the canvas, glow_x/glow_y the flame centre.", "lanterns/glow.png is a generic warm glow; draw it additively centred on glow_x/glow_y, sized ~2x glow_radius, and flicker its alpha/scale.", "depth is a suggested parallax factor (0 = fixed sky, 1 = moves most).", "fireflies: tiny additive sprites (lanterns/firefly.png, drawn size x size centred on x/y) wandering near the lanterns; draw each right after its lantern, same parallax depth. Formulas in fireflies.motion / fireflies.blink."], "layers": [{"file": "layers/00_sky.png", "depth": 0.0, "blur": 0, "brightness": 0.92}, {"file": "layers/01_moon.png", "depth": 0.02, "blur": 2, "brightness": 1.0}, {"file": "layers/02_trees_far.png", "depth": 0.1, "blur": 12, "haze": 0.05, "haze_rgb": [70, 68, 190], "brightness": 1.194}, {"file": "layers/03_fog_back.png", "depth": 0.12, "blur": 10, "brightness": 0.8, "opacity": 0.75, "blend": "screen"}, {"file": "layers/04_ground.png", "depth": 0.3, "blur": 2, "haze": 0.25, "haze_rgb": [90, 86, 210], "brightness": 0.7}, {"file": "layers/05_trees_mid.png", "depth": 0.35, "blur": 6, "haze": 0.16, "haze_rgb": [70, 68, 190], "brightness": 0.96}, {"file": "layers/06_trees_near.png", "depth": 0.6, "blur": 3, "haze": 0.067, "haze_rgb": [70, 68, 190], "brightness": 0.913}, {"lanterns": true, "note": "draw the lantern sprites here (between 06_trees_near and 07_graves_back)"}, {"file": "layers/07_graves_back.png", "depth": 0.45, "blur": 3, "haze": 0.207, "haze_rgb": [90, 86, 210], "brightness": 0.54}, {"file": "layers/08_fog_ground.png", "depth": 0.5, "blur": 2, "brightness": 0.8, "opacity": 0.7, "blend": "screen"}, {"file": "layers/09_graves_front.png", "depth": 0.8, "blur": 1, "haze": 0.134, "haze_rgb": [90, 86, 210], "brightness": 0.646}, {"file": "layers/10_grass_fg.png", "depth": 1.0, "blur": 3, "brightness": 1.053}], "lanterns": [{"name": "near_left", "file": "lanterns/lantern_near_left.png", "x": 39, "y": 423, "w": 186, "h": 199, "glow_x": 136, "glow_y": 532, "glow_radius": 120, "glow_rgb": [255, 160, 80], "blur": 2, "depth": 0.6}, {"name": "far_left", "file": "lanterns/lantern_far_left.png", "x": 328, "y": 550, "w": 145, "h": 152, "glow_x": 401, "glow_y": 631, "glow_radius": 70, "glow_rgb": [255, 160, 80], "blur": 5, "depth": 0.35}, {"name": "far_right", "file": "lanterns/lantern_far_right.png", "x": 1492, "y": 525, "w": 148, "h": 153, "glow_x": 1566, "glow_y": 608, "glow_radius": 70, "glow_rgb": [255, 160, 80], "blur": 5, "depth": 0.35}, {"name": "near_right", "file": "lanterns/lantern_near_right.png", "x": 1823, "y": 466, "w": 197, "h": 211, "glow_x": 1924, "glow_y": 581, "glow_radius": 120, "glow_rgb": [255, 160, 80], "blur": 2, "depth": 0.6}], "fireflies": {"file": "lanterns/firefly.png", "rgb": [214, 255, 140], "blend": "lighter", "motion": "x = ax + amp_x*(0.65*sin(speed*t+p0) + 0.35*sin(2.3*speed*t+p1)) + 1.2*sin(5.1*t+p2); y = ay + amp_y*(0.6*sin(0.8*speed*t+p3) + 0.4*sin(1.9*speed*t+p4)) + 1.0*sin(4.3*t+p5)", "blink": "c = frac(t/blink_period + blink_phase); alpha = peak * (c < 0.4 ? sin(pi*c/0.4)^2 : 0)", "list": [{"lantern": "near_left", "ax": 257, "ay": 495, "amp_x": 54, "amp_y": 36, "speed": 0.248, "phase": [0.71, 1.46, 4.76, 0.93, 4.65, 4.16], "blink_period": 4.48, "blink_phase": 0.54, "size": 32, "peak": 0.7, "blur": 2, "depth": 0.6}, {"lantern": "near_left", "ax": 152, "ay": 372, "amp_x": 72, "amp_y": 26, "speed": 0.224, "phase": [5.9, 2.53, 1.25, 2.08, 2.29, 6.0], "blink_period": 4.74, "blink_phase": 0.22, "size": 32, "peak": 0.7, "blur": 2, "depth": 0.6}, {"lantern": "far_left", "ax": 444, "ay": 537, "amp_x": 41, "amp_y": 23, "speed": 0.291, "phase": [1.28, 5.26, 6.21, 0.19, 4.62, 5.46], "blink_period": 6.28, "blink_phase": 0.22, "size": 22, "peak": 0.45, "blur": 5, "depth": 0.35}, {"lantern": "far_right", "ax": 1666, "ay": 551, "amp_x": 28, "amp_y": 21, "speed": 0.264, "phase": [0.26, 2.11, 2.1, 2.49, 4.06, 5.25], "blink_period": 7.36, "blink_phase": 0.98, "size": 22, "peak": 0.45, "blur": 5, "depth": 0.35}, {"lantern": "near_right", "ax": 1720, "ay": 595, "amp_x": 51, "amp_y": 27, "speed": 0.345, "phase": [3.43, 4.24, 0.59, 1.21, 5.79, 3.78], "blink_period": 6.43, "blink_phase": 0.1, "size": 32, "peak": 0.7, "blur": 2, "depth": 0.6}, {"lantern": "near_right", "ax": 1931, "ay": 363, "amp_x": 61, "amp_y": 42, "speed": 0.259, "phase": [2.86, 5.03, 2.79, 4.96, 3.53, 0.74], "blink_period": 4.35, "blink_phase": 0.98, "size": 32, "peak": 0.7, "blur": 2, "depth": 0.6}]}};
+const [CW, CH] = M.canvas;
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+const hidden = new Set();
+
+// one draw list: layers, with the lantern sprites spliced in where the manifest says
+const items = [];
+for (const L of M.layers) {
+  if (L.lanterns) M.lanterns.forEach(l => items.push({ ...l, sprite: true }));
+  else items.push({ ...L });
+}
+const load = src => new Promise((ok, err) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => err(src); i.src = src; });
+
+// bake blur / brightness / haze into an offscreen canvas per item (twice: with and without blur)
+function bake(it, img, withBlur) {
+  const pad = Math.ceil((it.blur || 0) * 3);
+  const w = img.width + pad * 2, h = img.height + pad * 2;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  const br = it.brightness ?? 1;
+  g.filter = `${withBlur && it.blur ? `blur(${it.blur}px) ` : ''}brightness(${br})`;
+  g.drawImage(img, pad, pad);
+  g.filter = 'none';
+  if (it.haze) {
+    const [r, gg, b] = it.haze_rgb;
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = `rgba(${r * br | 0},${gg * br | 0},${b * br | 0},${it.haze})`;
+    g.fillRect(0, 0, w, h);
+  }
+  return { c, pad };
+}
+
+let glowImg, flyImg;
+Promise.all(items.map(it => load(it.file))).then(async imgs => {
+  glowImg = await load('lanterns/glow.png');
+  flyImg = await load(M.fireflies.file);
+  items.forEach((it, i) => { it.sharp = bake(it, imgs[i], false); it.soft = bake(it, imgs[i], true); });
+  const box = $('layers');
+  items.filter(it => !it.sprite).forEach(it => {
+    const name = it.file.split('/').pop().replace('.png', '');
+    const lab = document.createElement('label');
+    lab.innerHTML = `<input type="checkbox" checked> ${name}`;
+    lab.firstChild.onchange = e => e.target.checked ? hidden.delete(it.file) : hidden.add(it.file);
+    box.appendChild(lab);
+  });
+  requestAnimationFrame(frame);
+}).catch(src => { document.body.insertAdjacentHTML('beforeend', `<p style="position:fixed;bottom:8px;left:12px">Could not load ${src}</p>`); });
+
+let mx = 0, my = 0, tx = 0, ty = 0;
+addEventListener('pointermove', e => { tx = e.clientX / innerWidth * 2 - 1; ty = e.clientY / innerHeight * 2 - 1; });
+
+function flicker(t, seed) {
+  return 0.82 + 0.10 * Math.sin(t * 7.1 + seed) + 0.05 * Math.sin(t * 13.7 + seed * 2.3) + 0.03 * Math.sin(t * 31.3 + seed * 5.1);
+}
+
+// lazy wander + slow blink, same formulas as manifest fireflies.motion / fireflies.blink
+function drawFireflies(name, t, dof) {
+  ctx.globalCompositeOperation = 'lighter';
+  for (const f of M.fireflies.list) {
+    if (f.lantern !== name) continue;
+    const c = ((t / f.blink_period + f.blink_phase) % 1 + 1) % 1;
+    if (c >= 0.4) continue;
+    const p = f.phase, w = f.speed;
+    const x = f.ax + f.amp_x * (0.65 * Math.sin(w * t + p[0]) + 0.35 * Math.sin(2.3 * w * t + p[1])) + 1.2 * Math.sin(5.1 * t + p[2]);
+    const y = f.ay + f.amp_y * (0.6 * Math.sin(0.8 * w * t + p[3]) + 0.4 * Math.sin(1.9 * w * t + p[4])) + 1.0 * Math.sin(4.3 * t + p[5]);
+    const soft = dof ? 1 + f.blur * 0.12 : 1;   // out-of-focus flies spread wider and dimmer
+    const sz = f.size * soft;
+    ctx.globalAlpha = f.peak * Math.sin(Math.PI * c / 0.4) ** 2 / soft;
+    ctx.drawImage(flyImg, x - sz / 2, y - sz / 2, sz, sz);
+  }
+}
+
+function frame(ms) {
+  const t = ms / 1000;
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  if (cv.width !== innerWidth * dpr || cv.height !== innerHeight * dpr) { cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; }
+  // cover-fit with a little overscan so parallax never shows an edge
+  const OVER = 1.06;
+  const s = Math.max(cv.width / CW, cv.height / CH) * OVER;
+  const ox = (cv.width - CW * s) / 2, oy = (cv.height - CH * s) / 2;
+  mx += (tx - mx) * 0.06; my += (ty - my) * 0.06;
+  const par = $('parallax').checked, dof = $('dof').checked, glow = $('glow').checked, flies = $('flies').checked;
+  const R = 60;  // max parallax shift in canvas px at depth 1
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0b0a1f'; ctx.fillRect(0, 0, cv.width, cv.height);
+  for (const it of items) {
+    if (hidden.has(it.file)) continue;
+    const d = par ? (it.depth ?? 0) : 0;
+    const px = -mx * R * d + Math.sin(t * 0.15) * 6 * d, py = -my * R * 0.4 * d;
+    ctx.setTransform(s, 0, 0, s, ox + px * s, oy + py * s);
+    ctx.globalAlpha = it.opacity ?? 1;
+    ctx.globalCompositeOperation = it.blend === 'screen' ? 'screen' : 'source-over';
+    const b = dof ? it.soft : it.sharp;
+    ctx.drawImage(b.c, (it.x || 0) - b.pad, (it.y || 0) - b.pad);
+    if (it.sprite && glow) {
+      const f = flicker(t, it.x * 0.013);
+      const r = it.glow_radius * (0.95 + 0.08 * f);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.55 * f;
+      ctx.drawImage(glowImg, it.glow_x - r, it.glow_y - r, r * 2, r * 2);
+      ctx.globalAlpha = 0.35 * f;   // wide, faint spill
+      ctx.drawImage(glowImg, it.glow_x - r * 2.2, it.glow_y - r * 2.2, r * 4.4, r * 4.4);
+    }
+    if (it.sprite && flies) drawFireflies(it.name, t, dof);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  }
+  requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>

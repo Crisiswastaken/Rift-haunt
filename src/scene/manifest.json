@@ -1,0 +1,322 @@
+{
+ "source": "reference/generated/v6b_layers (built by tools/build_assets.py)",
+ "canvas": [
+  2048,
+  1152
+ ],
+ "items": [
+  {
+   "name": "00_sky",
+   "file": "scene/00_sky.webp",
+   "x": 0,
+   "y": 0,
+   "w": 2048,
+   "h": 1152,
+   "depth": 0.0,
+   "opacity": 1,
+   "blend": "normal"
+  },
+  {
+   "name": "01_moon",
+   "file": "scene/01_moon.webp",
+   "x": 214,
+   "y": 10,
+   "w": 191,
+   "h": 208,
+   "depth": 0.02,
+   "opacity": 1,
+   "blend": "normal"
+  },
+  {
+   "name": "02_trees_far",
+   "file": "scene/02_trees_far.webp",
+   "x": -4,
+   "y": 116,
+   "w": 2068,
+   "h": 368,
+   "depth": 0.1,
+   "opacity": 1,
+   "blend": "normal"
+  },
+  {
+   "name": "03_fog_back",
+   "file": "scene/03_fog_back.webp",
+   "x": 192,
+   "y": 46,
+   "w": 1654,
+   "h": 1021,
+   "depth": 0.12,
+   "opacity": 0.75,
+   "blend": "screen"
+  },
+  {
+   "name": "04_ground",
+   "file": "scene/04_ground.webp",
+   "x": -6,
+   "y": 657,
+   "w": 2060,
+   "h": 501,
+   "depth": 0.3,
+   "opacity": 1,
+   "blend": "normal"
+  },
+  {
+   "name": "05_trees_mid",
+   "file": "scene/05_trees_mid.webp",
+   "x": 126,
+   "y": 94,
+   "w": 1862,
+   "h": 627,
+   "depth": 0.35,
+   "opacity": 1,
+   "blend": "normal"
+  },
+  {
+   "name": "06_trees_near",
+   "file": "scene/06_trees_near.webp",
+   "x": -9,
+   "y": 3,
+   "w": 2055,
+   "h": 737,
+   "depth": 0.6,
+   "opacity": 1,
+   "blend": "normal"
+  },
+  {
+   "name": "near_left",
+   "file": "scene/lantern_near_left.webp",
+   "x": 33,
+   "y": 417,
+   "w": 198,
+   "h": 211,
+   "depth": 0.6,
+   "opacity": 1,
+   "blend": "normal",
+   "lantern": {
+    "x": 136,
+    "y": 532,
+    "r": 120
+   }
+  },
+  {
+   "name": "far_left",
+   "file": "scene/lantern_far_left.webp",
+   "x": 313,
+   "y": 535,
+   "w": 175,
+   "h": 182,
+   "depth": 0.35,
+   "opacity": 1,
+   "blend": "normal",
+   "lantern": {
+    "x": 401,
+    "y": 631,
+    "r": 70
+   }
+  },
+  {
+   "name": "far_right",
+   "file": "scene/lantern_far_right.webp",
+   "x": 1477,
+   "y": 510,
+   "w": 178,
+   "h": 183,
+   "depth": 0.35,
+   "opacity": 1,
+   "blend": "normal",
+   "lantern": {
+    "x": 1566,
+    "y": 608,
+    "r": 70
+   }
+  },
+  {
+   "name": "near_right",
+   "file": "scene/lantern_near_right.webp",
+   "x": 1817,
+   "y": 460,
+   "w": 209,
+   "h": 223,
+   "depth": 0.6,
+   "opacity": 1,
+   "blend": "normal",
+   "lantern": {
+    "x": 1924,
+    "y": 581,
+    "r": 120
+   }
+  },
+  {
+   "name": "07_graves_back",
+   "file": "scene/07_graves_back.webp",
+   "x": 108,
+   "y": 634,
+   "w": 1761,
+   "h": 306,
+   "depth": 0.45,
+   "opacity": 1,
+   "blend": "normal"
+  },
+  {
+   "name": "08_fog_ground",
+   "file": "scene/08_fog_ground.webp",
+   "x": -6,
+   "y": 522,
+   "w": 2060,
+   "h": 635,
+   "depth": 0.5,
+   "opacity": 0.7,
+   "blend": "screen"
+  },
+  {
+   "name": "09_graves_front",
+   "file": "scene/09_graves_front.webp",
+   "x": -3,
+   "y": 730,
+   "w": 2050,
+   "h": 401,
+   "depth": 0.8,
+   "opacity": 1,
+   "blend": "normal"
+  },
+  {
+   "name": "10_grass_fg",
+   "file": "scene/10_grass_fg.webp",
+   "x": -9,
+   "y": 885,
+   "w": 2063,
+   "h": 274,
+   "depth": 1.0,
+   "opacity": 1,
+   "blend": "normal"
+  }
+ ],
+ "fireflies": [
+  {
+   "lantern": "near_left",
+   "ax": 257,
+   "ay": 495,
+   "amp_x": 54,
+   "amp_y": 36,
+   "speed": 0.248,
+   "phase": [
+    0.71,
+    1.46,
+    4.76,
+    0.93,
+    4.65,
+    4.16
+   ],
+   "blink_period": 4.48,
+   "blink_phase": 0.54,
+   "size": 32,
+   "peak": 0.7,
+   "blur": 2
+  },
+  {
+   "lantern": "near_left",
+   "ax": 152,
+   "ay": 372,
+   "amp_x": 72,
+   "amp_y": 26,
+   "speed": 0.224,
+   "phase": [
+    5.9,
+    2.53,
+    1.25,
+    2.08,
+    2.29,
+    6.0
+   ],
+   "blink_period": 4.74,
+   "blink_phase": 0.22,
+   "size": 32,
+   "peak": 0.7,
+   "blur": 2
+  },
+  {
+   "lantern": "far_left",
+   "ax": 444,
+   "ay": 537,
+   "amp_x": 41,
+   "amp_y": 23,
+   "speed": 0.291,
+   "phase": [
+    1.28,
+    5.26,
+    6.21,
+    0.19,
+    4.62,
+    5.46
+   ],
+   "blink_period": 6.28,
+   "blink_phase": 0.22,
+   "size": 22,
+   "peak": 0.45,
+   "blur": 5
+  },
+  {
+   "lantern": "far_right",
+   "ax": 1666,
+   "ay": 551,
+   "amp_x": 28,
+   "amp_y": 21,
+   "speed": 0.264,
+   "phase": [
+    0.26,
+    2.11,
+    2.1,
+    2.49,
+    4.06,
+    5.25
+   ],
+   "blink_period": 7.36,
+   "blink_phase": 0.98,
+   "size": 22,
+   "peak": 0.45,
+   "blur": 5
+  },
+  {
+   "lantern": "near_right",
+   "ax": 1720,
+   "ay": 595,
+   "amp_x": 51,
+   "amp_y": 27,
+   "speed": 0.345,
+   "phase": [
+    3.43,
+    4.24,
+    0.59,
+    1.21,
+    5.79,
+    3.78
+   ],
+   "blink_period": 6.43,
+   "blink_phase": 0.1,
+   "size": 32,
+   "peak": 0.7,
+   "blur": 2
+  },
+  {
+   "lantern": "near_right",
+   "ax": 1931,
+   "ay": 363,
+   "amp_x": 61,
+   "amp_y": 42,
+   "speed": 0.259,
+   "phase": [
+    2.86,
+    5.03,
+    2.79,
+    4.96,
+    3.53,
+    0.74
+   ],
+   "blink_period": 4.35,
+   "blink_phase": 0.98,
+   "size": 32,
+   "peak": 0.7,
+   "blur": 2
+  }
+ ]
+}

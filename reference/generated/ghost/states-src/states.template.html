@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Felt Ghost States</title>
+<style>
+  :root { --bg: #0b0a1f; --fg: #e9e4ff; --muted: #a9a3d8; --panel: rgba(11, 10, 31, .74); --line: rgba(233, 228, 255, .16); }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #ui { position: fixed; left: 12px; bottom: 12px; background: var(--panel); padding: 10px 12px; border-radius: 10px; width: 236px; }
+  #ui[hidden], #live-ui[hidden] { display: none; }
+  #ui b { font-size: 14px; }
+  #ui label { display: flex; gap: 6px; align-items: center; margin: 3px 0; }
+  .row { display: flex; gap: 6px; margin: 8px 0; }
+  .muted { color: var(--muted); }
+  button { font: inherit; color: var(--fg); background: rgba(233, 228, 255, .06); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+  button:hover { background: rgba(233, 228, 255, .14); }
+  button.on { background: rgba(185, 168, 255, .3); border-color: rgba(185, 168, 255, .6); }
+  #casts button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 6px; flex: 1; }
+  #casts img { width: 34px; height: 34px; }
+  #casts span { font-size: 11px; color: var(--muted); }
+  #spawn { width: 100%; margin-top: 6px; }
+  pre { font: 12px/1.5 ui-monospace, monospace; margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line); white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <b>Felt ghost · state machine</b>
+  <div class="row"><button data-mode="live" class="on">Live</button><button data-mode="lineup">Lineup</button></div>
+  <div id="live-ui">
+    <div class="muted">Cast a symbol: it hits every ghost whose first symbol matches.</div>
+    <div class="row" id="casts"></div>
+    <label><input type="checkbox" id="auto" checked> auto-play</label>
+    <label><input type="checkbox" id="slow"> slow motion</label>
+    <label><input type="checkbox" id="labels" checked> state labels</label>
+    <button id="spawn">Spawn ghost (S)</button>
+    <div class="muted" style="margin-top:6px">Space pauses.</div>
+  </div>
+  <pre class="muted">spawn → approach
+approach ⇄ hit  (blinks when idle)
+last symbol → banish → poof
+reaches you → boo</pre>
+</div>
+<script>/*BUNDLE*/</script>
+</body>
+</html>
