@@ -80,14 +80,20 @@ converting it to MJPEG with ffmpeg), so a session can be replayed through the re
 
 ## The beat
 
-Horror synthwave, synthesised live with Web Audio (`src/audio/beat.ts`, no audio files): 5/4 in D minor, an eighth
-every 0.18 s, an eight-bar phrase of Dm over a pedal, B♭, Gm and A with a flat nine. An original piano ostinato
-creeps chromatically over a low pedal (3+3+2+2), with a pulsing saw bass, big 80s drums with a gated snare, detuned
-strings swelling with a minor-second rub, a low drone, a square arp through a dotted-eighth delay and a riser into
-each phrase. It builds with the difficulty: strings, drone and soft piano on the title; the bass when a run starts;
-drums from D 0.25; arp and sixteenth hats from D 0.55; and down to two hearts, everything shifts up a semitone with
-the strings trembling. Pausing muffles it. M or the note button mutes it, and that's remembered. Browsers only allow
-sound after a click or key, so it starts on the first one.
+Spooky and bouncing, synthesised live with Web Audio (`src/audio/beat.ts`, no audio files): 4/4 at 160 bpm in D
+minor, a 32-bar cycle (48 s) that never ends. **A**, the hook: an original tune over a lament bass (Dm, C, B♭, A with a
+flat nine). **A′**, the hook again with glockenspiel, swooping up to a high A. **B**, the breather: half-time drums
+and a slow ghostly counter-line over Gm, Dm, E♭ and A, then a snare roll and a riser. **C**, the chaos: a pipe organ
+and a running square-wave toccata over a chromatic line (D, C♯, C, B, B♭, A), four on the floor, then a stutter, a
+dive and dead air before the hook slams back in. The sections sit within about a decibel of each other and the hats
+are kept soft, so it wears well over a long run.
+
+It builds with the difficulty: a ghostly choir, drone, wind and a music box playing the tune on the title; a
+bouncing bass when a run starts; drums from D 0.25; from D 0.55 a theremin (one gliding voice with a blooming
+vibrato) takes the tune, with glockenspiel and sixteenth hats; and down to two hearts, everything shifts up a
+semitone, the bass and a square lead under the tune are driven, claps and a shaker come in and the choir trembles.
+Pausing muffles it. M or the note button mutes it, and that's remembered. Browsers only allow sound after a click or
+key, so it starts on the first one.
 
 ## How it's built
 
