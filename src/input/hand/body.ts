@@ -65,7 +65,10 @@ export class Body {
   arms: Record<Side, Arm | null> = { L: null, R: null };
   /** the shoulders were seen (not guessed from the head) */
   shoulders = false;
+  /** while true the reach box (centre and size) is frozen: set by the pen while it's down */
+  holdBox = false;
 
+  private held: { x: number; y: number; w: number; h: number } | null = null;
   private anchor: number[] | null = null;
   private anchorT = 0;
   private sizes: { t: number; s: number }[] = [];
@@ -119,6 +122,7 @@ export class Body {
 
   /** where the drawing hand's box is, in camera pixels (centre and size): shrunk and shifted to stay in the picture */
   box(side: Side | null) {
+    if (this.holdBox && this.held) return this.held;
     const o = this.o, b = o.box, S = this.S;
     const a = this.anchor ?? [this.w * .6, this.h * .55, this.w * .4, this.h * .55];
     let ax = side === 'L' ? a[0] : side === 'R' ? a[2] : (a[0] + a[2]) / 2, ay = (a[1] + a[3]) / 2 + b.dy * S;
@@ -128,7 +132,7 @@ export class Body {
     const mx = (1 - b.fit) / 2 * this.w, my = (1 - b.fit) / 2 * this.h;
     ax = Math.min(Math.max(ax, bw / 2 + mx), this.w - bw / 2 - mx);
     ay = Math.min(Math.max(ay, bh / 2 + my), this.h - bh / 2 - my);
-    return { x: ax, y: ay, w: bw, h: bh };
+    return this.held = { x: ax, y: ay, w: bw, h: bh };
   }
 
   /** a camera point to the screen (0..1 across and down, mirrored like a mirror, clamped), and how far down the box it
@@ -154,7 +158,7 @@ export class Body {
   reset() {
     this.S = 0; this.t = -9; this.lm = null; this.side = null; this.arms = { L: null, R: null };
     this.anchor = null; this.sizes = []; this.order = 0; this.disagreeSince = this.otherSince = this.lostSince = this.smallSince = -1;
-    this.shoulders = false;
+    this.shoulders = false; this.held = null;
   }
 
   /** the model now and then swaps every left / right label at once. Facing the camera the shoulders keep their order
@@ -179,7 +183,9 @@ export class Body {
 
   /** the shoulder anchor and S; false when there's nothing to go on */
   private measure(lm: Float32Array, t: number, moving: boolean, fast: boolean): boolean {
-    const o = this.o, w = this.w, h = this.h, v = (i: number) => lm[i * 4 + 3];
+    const o = this.o, w = this.w, h = this.h;
+    // a joint below or beside the picture still reports high visibility (the model guesses it): it has to be in frame
+    const v = (i: number) => lm[i * 4 + 1] <= .95 && lm[i * 4] >= .02 && lm[i * 4] <= .98 ? lm[i * 4 + 3] : 0;
     let sh: number[], sw: number;
     if (v(LSH) >= o.vis && v(RSH) >= o.vis) {
       sh = [lm[LSH * 4] * w, lm[LSH * 4 + 1] * h, lm[RSH * 4] * w, lm[RSH * 4 + 1] * h];
@@ -189,7 +195,8 @@ export class Body {
       // up close: the shoulders are out of the picture; guess them from the head
       const ex = (lm[LEAR * 4] + lm[REAR * 4]) / 2 * w, ey = (lm[LEAR * 4 + 1] + lm[REAR * 4 + 1]) / 2 * h;
       sw = Math.hypot((lm[LEAR * 4] - lm[REAR * 4]) * w, (lm[LEAR * 4 + 1] - lm[REAR * 4 + 1]) * h) * o.earS;
-      sh = [ex + sw / 2, ey + .55 * sw, ex - sw / 2, ey + .55 * sw];
+      // measured with both in frame: the shoulder line is .59 S under the ears
+      sh = [ex + sw / 2, ey + .59 * sw, ex - sw / 2, ey + .59 * sw];
       this.shoulders = false;
     } else return false;
     // a glimpse of something that isn't shoulders

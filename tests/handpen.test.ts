@@ -63,6 +63,10 @@ function cam(x: number, y: number): [number, number] {
   return [ax - bw / 2 + (1 - u) * bw, ay - bh / 2 + v * bh];
 }
 
+/** the pointing fingertip minus the palm centre, camera pixels: hands are placed so the pen (the fingertip) is on target */
+const TIP = (() => { const h = hand('point', 0, 0); return [h.lm[24] * VW, h.lm[25] * VH]; })();
+const tipAt = (c: [number, number]): [number, number] => [c[0] - TIP[0], c[1] - TIP[1]];
+
 const W = 1600, H = 900;
 function rig() {
   const p = new HandPen(HANDS, () => ({ W, H })), strokes: Pt[][] = [];
@@ -71,8 +75,9 @@ function rig() {
   /** one 30 fps frame: the right palm at a screen point (or null: no hand at all), in a pose; `seen: false`: the hand
       model missed it but the body model still has the arm */
   const frame = (at: [number, number] | null, shape: Shape, o: { seen?: boolean; left?: [number, number] | null; hang?: boolean } = {}) => {
-    const c = at && cam(at[0], at[1]);
-    p.pose(t, body(o.hang ? null : c, o.left ? cam(o.left[0], o.left[1]) : null), VW, VH);
+    // the body model's arm stays on the target; the hand model's hand is placed so its pointing fingertip is
+    const a = at && cam(at[0], at[1]), c = a && tipAt(a);
+    p.pose(t, body(o.hang ? null : a, o.left ? cam(o.left[0], o.left[1]) : null), VW, VH);
     p.hand(t, c && o.seen !== false ? hand(shape, c[0], c[1]) : null, VW, VH);
     p.tick(t);
     t += 1 / 30;
@@ -105,14 +110,14 @@ describe('hand pose', () => {
   });
 });
 
-describe('hand pen: aim slowly, swipe quickly to draw', () => {
+describe('hand pen: point and swipe to draw, fist to move', () => {
   const rec = new Recognizer();
   const read = (s: Pt[]) => rec.read(s, 24)?.id ?? null;
 
   it('maps the box to the whole screen: a comfortable reach covers every corner', () => {
     const r = rig();
     for (const [x, y] of [[.02, .05], [.98, .05], [.02, .7], [.98, .7]] as [number, number][]) {
-      r.hold([x, y], 'open', 12);
+      r.hold([x, y], 'point', 12);
       expect(Math.abs(r.p.cursor.x - x * W)).toBeLessThan(W * .03);
       expect(Math.abs(r.p.cursor.y - y * H)).toBeLessThan(H * .04);
     }
@@ -131,9 +136,9 @@ describe('hand pen: aim slowly, swipe quickly to draw', () => {
     const r = rig();
     r.hold([.2, .6], 'open', 10);
     r.path([[.2, .6], [.4, .3]], 'open', 40); // aim, slowly
-    r.hold([.4, .3], 'open', 8);
+    r.hold([.4, .3], 'point', 8);
     r.path([[.4, .3], [.5, .6], [.6, .3]], 'point', 8, { noise: rng(4) }); // swipe
-    r.hold([.6, .3], 'open', 10);
+    r.hold([.6, .3], 'fist', 10);
     expect(r.strokes.length).toBe(1);
     expect(read(r.strokes[0])).toBe('fang');
     expect(Math.hypot(r.strokes[0][0].x - .4 * W, r.strokes[0][0].y - .3 * H)).toBeLessThan(W * .05);
@@ -141,26 +146,26 @@ describe('hand pen: aim slowly, swipe quickly to draw', () => {
 
   it('two quick strokes with slow travel between: two strokes, the travel not drawn', () => {
     const r = rig();
-    r.hold([.3, .4], 'open', 10);
-    r.path([[.3, .4], [.7, .4]], 'open', 8);
-    r.hold([.7, .4], 'open', 6);
-    r.path([[.7, .4], [.5, .15]], 'open', 40);
-    r.hold([.5, .15], 'open', 6);
-    r.path([[.5, .15], [.5, .6]], 'open', 8);
-    r.hold([.5, .6], 'open', 10);
+    r.hold([.3, .4], 'point', 10);
+    r.path([[.3, .4], [.7, .4]], 'point', 8);
+    r.hold([.7, .4], 'fist', 6);
+    r.path([[.7, .4], [.5, .15]], 'fist', 40);
+    r.hold([.5, .15], 'point', 6);
+    r.path([[.5, .15], [.5, .6]], 'point', 8);
+    r.hold([.5, .6], 'fist', 10);
     expect(r.strokes.map(read)).toEqual(['dash', 'pillar']);
     expect(Math.hypot(r.strokes[1][0].x - .5 * W, r.strokes[1][0].y - .15 * H)).toBeLessThan(W * .05);
   });
 
   it('keeps a quick circle going round, and carries a swipe along the arm when the hand model misses frames', () => {
     const r = rig();
-    r.hold([.5, .15], 'open', 10);
+    r.hold([.5, .15], 'point', 10);
     const ring = Array.from({ length: 13 }, (_, i) => [.5 + .14 * Math.sin(i / 12 * Math.PI * 2), .35 - .2 * Math.cos(i / 12 * Math.PI * 2)] as [number, number]);
-    r.path(ring, 'open', 3);
-    r.hold(ring[12], 'open', 10);
-    r.path([[.3, .6], [.3, .6]], 'open', 10);
-    r.path([[.3, .6], [.75, .6]], 'open', 10, { miss: [3, 8] }); // the hand model misses five of ten frames
-    r.hold([.75, .6], 'open', 10);
+    r.path(ring, 'point', 3);
+    r.hold(ring[12], 'fist', 10);
+    r.path([[.3, .6], [.3, .6]], 'point', 10);
+    r.path([[.3, .6], [.75, .6]], 'point', 10, { miss: [3, 5] }); // the hand model misses two of ten frames
+    r.hold([.75, .6], 'fist', 10);
     expect(r.strokes.map(read)).toEqual(['moon', 'dash']);
   });
 
@@ -181,16 +186,38 @@ describe('hand pen: aim slowly, swipe quickly to draw', () => {
     p.onStroke = s => strokes.push(s);
     let t = 0, now = 0;
     const frame = (at: [number, number], seen = true) => {
-      const c = cam(at[0], at[1]);
+      const a = cam(at[0], at[1]), c = tipAt(a);
       while (now < t + .1) { p.tick(now); now += 1 / 60; }
-      p.pose(t, body(c), VW, VH);
-      p.hand(t, seen ? hand('open', c[0], c[1]) : null, VW, VH, t + .1);
+      p.pose(t, body(a), VW, VH);
+      p.hand(t, seen ? hand('point', c[0], c[1]) : null, VW, VH, t + .1);
       t += 1 / 8;
     };
     for (let i = 0; i < 8; i++) frame([.25, .4]);
     for (let i = 0; i <= 3; i++) frame([.25 + .5 * i / 3, .4], i !== 2); // a swipe in under half a second, a frame missed
     for (let i = 0; i < 6; i++) frame([.75, .4]);
     expect(strokes.map(s => rec.read(s, 24)?.id)).toEqual(['dash']);
+  });
+
+  it('a fist never draws, however quick', () => {
+    const r = rig();
+    r.hold([.3, .4], 'fist', 10);
+    r.path([[.3, .4], [.7, .4], [.5, .7]], 'fist', 6);
+    r.hold([.5, .7], 'fist', 10);
+    expect(r.strokes.length).toBe(0);
+    expect(r.p.cursor.drawing).toBe(false);
+  });
+
+  it('a one-frame fist blip in the middle of a V does not split it', () => {
+    const r = rig();
+    r.hold([.4, .3], 'point', 10);
+    let drawing = false;
+    r.path([[.4, .3], [.5, .6]], 'point', 8);
+    drawing = r.p.cursor.drawing;
+    r.frame([.5, .6], 'fist');
+    r.path([[.5, .6], [.6, .3]], 'point', 8);
+    r.hold([.6, .3], 'fist', 10);
+    expect(drawing).toBe(true);
+    expect(r.strokes.map(read)).toEqual(['fang']);
   });
 
   it('the other hand only takes over once it is clearly higher for a moment', () => {

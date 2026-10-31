@@ -1,8 +1,8 @@
 /* MediaPipe on camera frames, in two parts that run side by side (one worker each), after RIFT-Desktop:
    - PoseCore: the body model on the whole frame. Where you are, your shoulders and arms (which hand is up, the box
      your hand moves in, where to look for the hand), and the person mask that cuts you out into the graveyard.
-   - HandCore: the hand model on a close crop around your hand, cut from the full-size frame, so a hand two metres
-     away is still big enough to read the pointing finger. The pen only ever waits on this one.
+   - HandCore: the hand model on the whole frame at 640 wide (a crop only for a far player), so a lost hand is found
+     again in a frame or two. On the GPU when asked, else the CPU. The pen only ever waits on this one.
    Shared by the workers and the main-thread fallback. */
 import { FilesetResolver, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 
@@ -22,16 +22,24 @@ function blank(w: number, h: number) {
   return c.transferToImageBitmap();
 }
 
+function warmUp(core: { process(image: ImageBitmap, tMs: number): unknown }, w: number, h: number) {
+  const b = blank(w, h);
+  try { for (let i = 0; i < 3; i++) core.process(b, i + 1); } finally { b.close(); }
+}
+
 /** MediaPipe wants strictly increasing timestamps */
 class Clock {
   private last = 0;
   next(tMs: number) { return this.last = Math.max(Math.round(tMs), this.last + 1); }
 }
 
-async function create<T>(make: (d: Delegate) => Promise<T>, prefer: Delegate): Promise<{ task: T; delegate: Delegate }> {
+/** makes the task on the GPU (WebGL2 on an OffscreenCanvas in a worker) when asked, and on the CPU if that fails to
+    start or to run its warm-up frames */
+async function create<T extends { close(): void }>(make: (d: Delegate) => Promise<T>, prefer: Delegate, warm: (t: T) => void): Promise<{ task: T; delegate: Delegate }> {
   const order: Delegate[] = prefer === 'GPU' ? ['GPU', 'CPU'] : ['CPU'];
   for (const d of order) {
-    try { return { task: await make(d), delegate: d }; } catch (e) { if (d === order[order.length - 1]) throw e; }
+    let task: T | null = null;
+    try { task = await make(d); warm(task); return { task, delegate: d }; } catch (e) { task?.close(); if (d === order[order.length - 1]) throw e; }
   }
   throw new Error('unreachable');
 }
@@ -49,12 +57,9 @@ export class PoseCore {
       baseOptions: { modelAssetPath: base + 'pose_landmarker_lite.task', delegate },
       runningMode: 'VIDEO', numPoses: 1, outputSegmentationMasks: true,
       minPoseDetectionConfidence: .5, minPosePresenceConfidence: .5, minTrackingConfidence: .5,
-    }), prefer);
+    }), prefer, t => { this.pose = t; warmUp(this, 640, 360); });
     this.pose = r.task;
     this.delegate = r.delegate;
-    const b = blank(640, 360);
-    for (let i = 0; i < 3; i++) this.process(b, i + 1);
-    b.close();
     this.prev = null;
   }
 
@@ -96,12 +101,9 @@ export class HandCore {
       // one hand: with two, the palm finder runs on every frame looking for the second
       runningMode: 'VIDEO', numHands: 1,
       minHandDetectionConfidence: .5, minHandPresenceConfidence: .5, minTrackingConfidence: .5,
-    }), prefer);
+    }), prefer, t => { this.hands = t; warmUp(this, 640, 360); });
     this.hands = r.task;
     this.delegate = r.delegate;
-    const b = blank(256, 256);
-    for (let i = 0; i < 3; i++) this.process(b, i + 1);
-    b.close();
   }
 
   process(image: ImageBitmap | HTMLVideoElement, tMs: number): HandResult {

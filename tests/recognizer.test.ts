@@ -74,6 +74,30 @@ describe('recognizer', { timeout: 60000 }, () => {
     expect(k, report).toBeGreaterThanOrEqual(.92);
   });
 
+  it('reads a line down with the hand coming back up over it as a line down', () => {
+    const r = rng(31), wanted = new Set<SymbolId>(['pillar', 'fang']);
+    let ok = 0;
+    for (let i = 0; i < 100; i++) {
+      const s = sloppy([{ x: 50, y: 10 }, { x: 50, y: 90 }, { x: 53, y: 40 }], false, r, .02, .01, 6);
+      if (rec.read(s, 20, wanted)?.id === 'pillar') ok++;
+    }
+    expect(ok).toBeGreaterThanOrEqual(95);
+  });
+
+  it('reads a V with a hook at its end as a V when a V is on screen', () => {
+    const r = rng(32), wanted = new Set<SymbolId>(['fang']);
+    let ok = 0;
+    for (let i = 0; i < 100; i++) {
+      const s = sloppy([{ x: 20, y: 20 }, { x: 50, y: 80 }, { x: 80, y: 20 }, { x: 66, y: 30 }], false, r, .02, .01, 6);
+      if (rec.read(s, 20, wanted)?.id === 'fang') ok++;
+    }
+    expect(ok).toBeGreaterThanOrEqual(90);
+  });
+
+  it('reads a diagonal as no line at all', () => {
+    expect(rec.read([{ x: 10, y: 10 }, { x: 50, y: 50 }, { x: 90, y: 90 }], 20, new Set(['pillar']))).toBeNull();
+  });
+
   it('ignores taps and tiny strokes', () => {
     expect(rec.read([{ x: 10, y: 10 }, { x: 12, y: 11 }, { x: 13, y: 12 }], 20)).toBeNull();
   });

@@ -61,11 +61,12 @@ export class Camera {
     this.video.srcObject = null;
   }
 
-  /** what the camera actually gives us: its picture size, and frames a second (measured once it's running) */
+  /** what the camera actually gives us: its picture size, and frames a second (measured once it's running; the HUD's
+      dim-room warning reads `fps`) */
   fps = 0;
   get settings() { const s = this.stream?.getVideoTracks()[0]?.getSettings(); return { w: s?.width ?? 0, h: s?.height ?? 0, fps: s?.frameRate ?? 0 }; }
 
-  /** call `fn` for each new camera frame (up to 30 a second), until the returned function is called. Paced off the
+  /** call `fn` for each new camera frame, until the returned function is called. Paced off the
       display rather than video-frame callbacks, which a hidden <video> may never get; a frame counts as new when the
       video's decoded-frame count moves (where the browser keeps one). A dim room can drop a webcam to 15 a second. */
   frames(fn: (t: number) => void): () => void {
@@ -83,7 +84,8 @@ export class Camera {
       if (counts && n >= 0) {
         if (n0 < 0) { n0 = n; n0T = t; } else if (t - n0T >= 1) { this.fps = (n - n0) / (t - n0T); n0 = n; n0T = t; }
       } else this.fps = this.settings.fps;
-      if (fresh && t - last >= .9 / 30) { last = t; fn(t); }
+      // counted frames all go through; uncounted ones are guessed at, so capped at 30 a second
+      if (fresh && (counts || t - last >= .9 / 30)) { last = t; fn(t); }
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);

@@ -32,6 +32,8 @@ export class Hands {
   constructor(gl: Gl, stage: () => { W: number; H: number }) {
     this.pen = new HandPen(HANDS, stage);
     this.player = new Player(gl, this.pen.body);
+    // the firefly sits on your fingertip in the picture of you
+    this.pen.view = this.player.toScreen;
   }
 
   /** start the camera and the tracking; resolves to a message to show if it couldn't */
@@ -94,7 +96,19 @@ export class Hands {
   /** a hand has been seen in the last moment */
   handSeen(now: number) { return this.on && now - this.handT < .5; }
   /** the camera is giving us few frames (a dim room slows webcams down) */
-  slow() { return this.on && this.camera.fps > 0 && this.camera.fps < 20; }
+  slow() { return this.on && this.camera.fps > 0 && this.camera.fps < 25; }
+  /** the low-light warning for the HUD, or null */
+  lowLight() { return this.slow() ? `Too dark — camera at ${this.camera.fps.toFixed(0)} fps, add light` : null; }
+
+  /** the practice coaching line, from what the camera sees */
+  coach(now: number) {
+    const c = this.pen.cursor;
+    if (!this.present(now)) return 'Stand in front of the camera';
+    if (!this.handSeen(now)) return 'Raise one hand in front of you';
+    if (c.drawing) return "That's it: swipe the line, then make a fist";
+    if (c.pose === 'point') return 'Now swipe a line across the ghost';
+    return 'Point your finger to draw · Make a fist to move';
+  }
 
   /** the debug panel's lines */
   report(): string {

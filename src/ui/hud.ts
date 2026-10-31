@@ -15,12 +15,15 @@ export class Hud {
   private comboN = $('combo-n');
   private cueBox = $('cue');
   private hint = $('hint');
+  private dark = Object.assign(document.createElement('p'), { className: 'light-hint', hidden: true });
   private shown = 0;
   private hand = $('hand-cursor');
   private held: { el: HTMLElement; t: number } | null = null;
 
   constructor(private stage: HTMLElement) {
     for (const img of document.querySelectorAll<HTMLImageElement>('img[data-src]')) img.src = ASSETS + img.dataset.src;
+    stage.append(this.dark);
+    this.dark.setAttribute('aria-live', 'polite');
     this.hearts.innerHTML = Array.from({ length: RULES.hearts }, () => `<img src="${ASSETS}hud/heart.webp" alt="" draggable="false">`).join('');
   }
 
@@ -96,6 +99,12 @@ export class Hud {
     this.hint.classList.toggle('on', !!text);
   }
 
+  /** the low-light warning (Hands.lowLight()), or null to hide it */
+  light(text: string | null) {
+    if (this.dark.textContent !== (text ?? '')) this.dark.textContent = text ?? '';
+    this.dark.hidden = !text;
+  }
+
   setBest(best: number) {
     $('title-best').textContent = best.toLocaleString('en-US');
     $('best-line').hidden = best <= 0;
@@ -152,7 +161,7 @@ export class Hud {
   debug(on: boolean) { this.debugging = on; $('hand-debug').hidden = !on; }
   debugText(s: string) { const el = $('hand-debug'); if (el.textContent !== s) el.textContent = s; }
 
-  /** the firefly at your hand: bright while you're drawing (`lit`), dim while you aim */
+  /** the firefly at your hand: dim and small while the pen is up (aiming), bright and glowing while it's down (`drawing`) */
   cursor(visible: boolean, x: number, y: number, lit: boolean, drawing: boolean) {
     const c = this.hand;
     c.classList.toggle('on', visible);

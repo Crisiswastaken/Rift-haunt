@@ -165,6 +165,58 @@ function tangle(stroke: Pt[], diag: number): number {
   return len / diag;
 }
 
+const turnAt = (p: Pt[], i: number, k = 2) => {
+  const ax = p[i].x - p[i - k].x, ay = p[i].y - p[i - k].y, bx = p[i + k].x - p[i].x, by = p[i + k].y - p[i].y;
+  const c = (ax * bx + ay * by) / (Math.hypot(ax, ay) * Math.hypot(bx, by) || 1);
+  return Math.acos(Math.max(-1, Math.min(1, c))) * 180 / Math.PI;
+};
+/** sharp corners along an evenly resampled path (so an index is a fraction of the ink): local peaks over `min` deg */
+function corners(p: Pt[], min: number, k = 2): { i: number; turn: number }[] {
+  const t = p.map((_, i) => (i >= k && i < p.length - k ? turnAt(p, i, k) : 0)), out: { i: number; turn: number }[] = [];
+  for (let i = k; i < p.length - k; i++) if (t[i] > min && t[i] >= t[i - 1] && t[i] >= t[i + 1]) out.push({ i, turn: t[i] });
+  return out;
+}
+
+function distToPath(q: Pt, path: Pt[]): number {
+  let m = Infinity;
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1], b = path[i], dx = b.x - a.x, dy = b.y - a.y, L = dx * dx + dy * dy;
+    const k = L ? Math.max(0, Math.min(1, ((q.x - a.x) * dx + (q.y - a.y) * dy) / L)) : 0;
+    m = Math.min(m, Math.hypot(q.x - a.x - k * dx, q.y - a.y - k * dy));
+  }
+  return m;
+}
+
+/** a swipe and the hand coming back the same way: keep the longer side of a sharp reversal (over 140 deg) when the
+    shorter side runs back over it (no shape here goes back over its own path). Cuts the original points. */
+function unreturn(stroke: Pt[]): Pt[] {
+  let src = stroke;
+  for (let pass = 0; pass < 2; pass++) {
+    const p = resample(src, N), c = corners(p, 140).sort((x, y) => y.turn - x.turn)[0];
+    if (!c) break;
+    const A = p.slice(0, c.i + 1), B = p.slice(c.i), [long, short] = A.length >= B.length ? [A, B] : [B, A];
+    // it has to run back along the part it just drew (a loop's end coming round to its start isn't a return)
+    const m = Math.min(long.length, Math.ceil(short.length * 1.5)), near = long === A ? A.slice(A.length - m) : B.slice(0, m);
+    if (short.some(q => distToPath(q, near) > bounds(long).diag * .15)) break;
+    // the original points, cut at the same fraction of the ink
+    let total = 0, len = 0, k = 0;
+    for (let i = 1; i < src.length; i++) total += dist(src[i - 1], src[i]);
+    const at = c.i / (N - 1) * total;
+    while (k < src.length - 1 && len + dist(src[k], src[k + 1]) <= at) { len += dist(src[k], src[k + 1]); k++; }
+    src = long === A ? src.slice(0, k + 1) : src.slice(k);
+  }
+  return src;
+}
+
+/** the stroke without a hook at its start and/or end (a turn over 45 deg in the first or last 40% of the ink), longest first */
+function trims(stroke: Pt[]): Pt[][] {
+  const p = resample(stroke, N), c = corners(p, 45), lim = Math.round(N * .4);
+  const s = c.filter(k => k.i <= lim).map(k => k.i), e = c.filter(k => k.i >= N - 1 - lim).map(k => k.i);
+  const out: Pt[][] = [...s.map(i => p.slice(i)), ...e.map(i => p.slice(0, i + 1))];
+  if (s.length && e.length) out.push(p.slice(Math.max(...s), Math.min(...e) + 1));
+  return out.sort((x, y) => y.length - x.length);
+}
+
 export class Recognizer {
   private templates: { id: SymbolId; cloud: Cloud }[] = [];
 
@@ -179,18 +231,33 @@ export class Recognizer {
    * wanted: the shapes on screen right now, which win close calls.
    */
   read(stroke: Pt[], minSize: number, wanted?: ReadonlySet<SymbolId>): Reading | null {
+    if (stroke.length < 2 || bounds(stroke).diag < minSize) return null;
+    const s = unreturn(stroke), full = this.readOne(s, wanted);
+    // a clean line has no hook to trim
+    if (!wanted || (full && (wanted.has(full.id) || LINES.has(full.id)))) return full;
+    // not a shape on screen as a whole: maybe it is without a hook at one end
+    const vee = (id?: SymbolId) => id === 'fang' || id === 'roof';
+    for (const t of trims(s)) {
+      const r = this.readOne(t, wanted);
+      // a V is never trimmed into a roof or a roof into a V (one arm of either reads as both)
+      if (r && wanted.has(r.id) && !(vee(full?.id) && vee(r.id))) return r;
+    }
+    return full;
+  }
+
+  private readOne(stroke: Pt[], wanted?: ReadonlySet<SymbolId>): Reading | null {
     if (stroke.length < 2) return null;
     const { diag } = bounds(stroke);
-    if (diag < minSize) return null;
 
     // straight: nothing strays far from the line between the ends (path length is a poor test: jitter inflates it)
     const a = stroke[0], b = stroke[stroke.length - 1], ends = dist(a, b);
     let dev = 1;
-    if (ends > diag * .8) {
+    // measured whatever the ends, so a line with a small hook can still match the line templates below
+    if (ends > 0) {
       dev = 0;
       for (const p of stroke) dev = Math.max(dev, Math.abs((b.x - a.x) * (a.y - p.y) - (a.x - p.x) * (b.y - a.y)) / ends);
       dev /= ends;
-      if (dev < .12) return this.line(Math.atan2(Math.abs(b.y - a.y), Math.abs(b.x - a.x)) * 180 / Math.PI, dev / .12, wanted);
+      if (ends > diag * .8 && dev < .12) return this.line(Math.atan2(Math.abs(b.y - a.y), Math.abs(b.x - a.x)) * 180 / Math.PI, dev / .12);
     }
 
     if (tangle(stroke, diag) > MAX_TANGLE) return null;
@@ -214,15 +281,9 @@ export class Recognizer {
     return { id, confidence: Math.max(0, 1 - d / this.maxDistance) };
   }
 
-  private line(angle: number, wobble: number, wanted?: ReadonlySet<SymbolId>): Reading | null {
+  /** within 35 deg of level or upright; a diagonal is neither, whatever is on screen */
+  private line(angle: number, wobble: number): Reading | null {
     const confidence = 1 - wobble * .5;
-    if (angle < 35) return { id: 'dash', confidence };
-    if (angle > 55) return { id: 'pillar', confidence };
-    // a diagonal: if only one of the two is on screen, that's what was meant
-    const d = wanted?.has('dash'), p = wanted?.has('pillar');
-    if (d && !p) return { id: 'dash', confidence: .4 };
-    if (p && !d) return { id: 'pillar', confidence: .4 };
-    if (Math.abs(angle - 45) < 4) return null;
-    return { id: angle < 45 ? 'dash' : 'pillar', confidence: .3 };
+    return angle < 35 ? { id: 'dash', confidence } : angle > 55 ? { id: 'pillar', confidence } : null;
   }
 }

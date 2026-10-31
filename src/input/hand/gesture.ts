@@ -28,17 +28,18 @@ export interface PoseOpts {
       [to start, to carry on] */
   index: [number, number];
   margin: [number, number];
-  /** open: index, middle and ring all at least this straight; a fist: all four at most `curled` */
+  /** open: index, middle and ring all at least this straight; a fist: the index at most `curled[0]` and the middle and
+      ring at most `curled[1]` (thumb and little finger ignored: they often stay out in a real fist) */
   open: number;
-  curled: number;
+  curled: [number, number];
 }
 
 /** the hand's pose; `was`: its pose last frame (pointing is easier to keep than to start) */
 export function pose(world: ArrayLike<number>, o: PoseOpts, was: Pose = 'other'): Pose {
-  const [index, middle, ring, little] = straightness(world);
+  const [index, middle, ring] = straightness(world);
   const k = was === 'point' ? 1 : 0;
   if (index >= o.index[k] && index - Math.max(middle, ring) >= o.margin[k]) return 'point';
   if (index >= o.open && middle >= o.open && ring >= o.open) return 'open';
-  if (index <= o.curled && middle <= o.curled && ring <= o.curled && little <= o.curled) return 'fist';
+  if (index <= o.curled[0] && Math.max(middle, ring) <= o.curled[1]) return 'fist';
   return 'other';
 }

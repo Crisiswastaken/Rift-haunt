@@ -114,8 +114,10 @@ export const RULES = {
  * shoulder width in camera pixels; screen distances are fractions of the screen.
  */
 export const HANDS = {
-  /** where each model runs (GPU or CPU). Measured on a real player: the hand model finds the hand in 84% of frames on
-      the CPU against 33% on the GPU, and both run about as fast on the CPU (25 ms) with the GPU left to the game */
+  /** where each model runs (GPU or CPU; ?hand=GPU tries it). The hand model on the GPU falls back to the CPU if it
+      won't start. On whole 640x360 frames (M2, no game running) the GPU took 9 ms against 18-29 ms with the same
+      landmarks; on 256 crops under game load it found the hand in 33% of frames against 84%. CPU until the GPU is
+      checked under game load with the D panel */
   delegates: { pose: 'CPU', hand: 'CPU' } as { pose: 'GPU' | 'CPU'; hand: 'GPU' | 'CPU' },
   pose: {
     /** pointing: the index at least this straight and this much straighter than the middle and ring fingers;
@@ -125,36 +127,45 @@ export const HANDS = {
     index: [.85, .7] as [number, number],
     margin: [.2, .08] as [number, number],
     open: .8,
-    curled: .6,
+    /** a fist: the index at most [0] straight and the middle and ring at most [1] (thumb and little finger ignored) */
+    curled: [.65, .7] as [number, number],
   },
   body: {
     vis: .3, wristLo: .15, palm: .35,
-    /** the box your hand moves in: S wide and tall, centred this far under the shoulder line; it maps to a little more
+    /** the box your hand moves in: S wide and tall (tuned so a seated player's fingertip spans ~80% of the screen on
+        both logs), centred this far under the shoulder line; it maps to a little more
         than the screen so the edges are easy to reach */
     box: { w: 2.2, h: 1.42, dy: .1, fit: .95, overX: .06, overTop: .06, overBottom: .08 },
     anchorTau: .1, sizeWindow: 3,
     raiseMargin: .5, switchTime: .2, raised: -.3, holdTime: .5,
     restY: .85, restBack: .7, below: .12, edge: .03, reach: 1.3,
-    earS: 2.6,
+    earS: 2.75,
   },
   smooth: {
     minCutoff: .5, beta: 16, vFloor: .6, perpCutoff: 2.5, perpBeta: .5,
     trackCutoff: 6, trackBeta: 20, velWindow: .05,
     moveDisp: .06, moveV: 1, stillDisp: .04, stillV: .5, dispWindow: .15,
-    deadzone: .025,
+    deadzone: .01,
     lead: .025, leadV0: .4, leadV1: .8, leadMax: .04, leadTau: .06,
     jump0: .1, jumpK: 3, agree: 4, jumpGap: 1.6,
   },
-  /** drawing is by speed: aim slowly, swipe the shape quickly. A stroke starts when the hand goes faster than downV
-      (screens a second) and ends once it's been slower than upV for `up` s (long enough for the turn in a V); it
-      starts from where the hand was `preroll` s before. Measured on a real player: aiming stays under .25, drawing
-      runs .8 to over 2 (RIFT's slicer presses at .75 and releases under .45) */
-  downV: .7,
-  upV: .4,
+  /** point and move to draw, fist (or open hand) to move without drawing. Pen down: pointing for `point` [frames, s]
+      and the fingertip faster than `downV` (from where it was `preroll` s before). Pen up: fist or open for `end`
+      [frames, s], trimmed back to the first of them, or slower than `upV` for `up` s (tuned on the two replays).
+      Speeds are screens a second (fractions of each screen axis) */
+  point: [2, .05] as [number, number],
+  end: [3, .1] as [number, number],
+  downV: .35,
+  upV: .2,
   up: .12,
   preroll: .1,
-  /** no hand at all: the stroke coasts this long, then the pen lifts, then the cursor hides */
-  coast: .07, lift: .12, hide: .4,
+  /** a stroke shorter than [s, samples] isn't cast; still points within `trim` of the screen at each end are cut */
+  minStroke: [.1, 4] as [number, number],
+  trim: .02,
+  /** no hand at all: the stroke coasts this long, then waits; hand lost `lost` s (or leaving the picture) drops it
+      uncast; the cursor hides after `hide`. In a dim room the hand model misses runs of 7-9 frames (~.4 s at 18/s),
+      which a stroke should survive */
+  coast: .07, lost: .5, hide: .6,
   /** the longest stroke; after it the pen lifts until the hand slows down */
   maxStroke: 4,
   palmS: 5,

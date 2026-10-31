@@ -247,14 +247,7 @@ export class Game {
   }
 
   /** what to tell you while you practise, from what the camera sees */
-  private practiceCoach(now: number) {
-    const h = this.hands, c = h.pen.cursor;
-    if (!h.present(now)) return 'Stand in front of the camera';
-    if (h.slow()) return 'More light makes the tracking quicker';
-    if (!h.handSeen(now)) return 'Raise one hand in front of you';
-    if (c.drawing) return "That's it: swipe the shape, then slow down";
-    return 'Move your hand slowly to aim, then swipe a line across, quickly';
-  }
+  private practiceCoach(now: number) { return this.hands.coach(now); }
 
   private pause(why: 'you' | 'away' = 'you') {
     if (this.mode !== 'play' && this.mode !== 'ready' && this.mode !== 'practice') return;
@@ -297,7 +290,6 @@ export class Game {
 
   private stroke(pts: Pt[]) {
     const w = this.w;
-    if (this.mode !== 'play' && this.mode !== 'practice') { this.ink.finish(pts, null); return; }
     // only ghosts whose symbols have had a moment to show
     const live = w.ghosts.filter(g => g.live && g.front && w.t - g.born > .15);
     const wanted = new Set<SymbolId>(live.map(g => g.front!));
@@ -308,7 +300,9 @@ export class Game {
       recorder.log('stroke', { mode: this.mode, read: read?.id ?? null, any: this.rec.read(pts, Math.max(24, w.U * .03))?.id ?? null, wanted: [...wanted],
         n: pts.length, box: [Math.round(x0), Math.round(y0), Math.round(x1 - x0), Math.round(y1 - y0)], screen: [w.W, w.H] });
     }
-    if (!read) { this.ink.finish(pts, null); return; }
+    if (this.mode !== 'play' && this.mode !== 'practice') { this.ink.finish(pts, null); return; }
+    // hands: a shape nobody is showing is a stray move, not a miss: no cast, the combo stays
+    if (!read || (this.input === 'hands' && !wanted.has(read.id))) { this.ink.finish(pts, null); return; }
     const id = read.id, color = SYMBOLS[id].color;
     this.ink.finish(pts, color);
 
@@ -494,6 +488,7 @@ export class Game {
     // the cursor, and pressing menu buttons by holding a fingertip on them
     const c = h.pen.cursor, menus = this.mode === 'title' || this.mode === 'over' || this.mode === 'paused' || this.mode === 'camera';
     this.hud.cursor(c.visible, c.x, c.y, c.drawing, c.drawing);
+    this.hud.light(h.lowLight());
     this.hud.dwell(menus && c.visible ? c : null, dt, HANDS.dwell);
     if (this.hud.debugging) this.hud.debugText(h.report());
   }
