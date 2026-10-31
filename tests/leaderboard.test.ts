@@ -79,7 +79,7 @@ describe('the referee', () => {
 
 describe('names', () => {
   it('tidies and shapes them', () => {
-    expect(shapeName('  Sohan   Reddy ')).toEqual({ name: 'Sohan Reddy' });
+    expect(shapeName('  Pumpkin   King ')).toEqual({ name: 'Pumpkin King' });
     expect(shapeName("Zoë O'Neil-Smith")).toEqual({ name: "Zoë O'Neil-Smith" });
     expect(shapeName('line\nbreak')).toEqual({ name: 'line break' });
     for (const bad of ['a', 'x'.repeat(17), '<script>', 'boo\u{1F47B}', '__', `zero${String.fromCharCode(0x200b)}width`, 'nul\u0000l', '']) {
@@ -88,7 +88,7 @@ describe('names', () => {
   });
 
   it('lets innocent names through', () => {
-    for (const name of ['Vince', 'Sohan Reddy', 'Kshitij', 'Gandum', 'Nigeria', 'Cassie', 'Dickens', 'Peacock', 'Hancock',
+    for (const name of ['Wanda', 'Ada Lovelace', 'Kshitij', 'Gandum', 'Nigeria', 'Cassie', 'Dickens', 'Peacock', 'Hancock',
       'Therapist', 'Assassin', 'Grape', 'Spicy', 'Raccoon', 'Analyst', 'Cumberland', 'Title', 'Matsushita', 'Nazir',
       'Ghost_Buster', 'Pumpkin King', 'Shitake', 'Scott', 'Class Act', 'Torpedo', 'Hello', 'Essex']) {
       expect(decentName(name), name).toBe(true);

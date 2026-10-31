@@ -3,7 +3,8 @@ import os, json
 import numpy as np, cv2
 from PIL import Image
 
-OUT = r'C:\Users\vince\OneDrive\Attachments\Desktop\Rift-haloween\reference\generated\ghost\rig'
+# writes next to this script
+OUT = os.path.dirname(os.path.abspath(__file__))
 os.makedirs(OUT, exist_ok=True)
 TARGET_W, PAD = 600, 24
 FACES = {'idle': 'ghost_felt.png', 'blink': 'st/blink.png', 'hit': 'st/hit.png', 'ouch': 'st/ouch.png', 'boo': 'st/boo.png'}

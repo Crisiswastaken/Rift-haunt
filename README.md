@@ -70,6 +70,15 @@ Turned-away runs are logged with the reason. Like any game that runs in the brow
 script that plays perfectly is still playing), but editing the score, the page or the request gets nowhere, and
 nothing can be claimed past flawless play. Saving is off with `?debug`, which exposes the game in the console.
 
+## Privacy
+
+Hands mode reads the camera in the browser and nowhere else: frames go from `src/input/hand/camera.ts` to the two
+MediaPipe models in web workers (`src/input/hand/vision*.ts`), which run on the device from files this site serves
+(`public/vision/`). No frame, picture or landmark is sent anywhere. What does go over the network: the page, its art
+and the models (downloads), the Fredoka font from Google Fonts, the leaderboard (a run's log, and a name only if you
+save one) and cookieless Vercel Web Analytics. The session recorder (`src/debug/recorder.ts`) exists on the dev
+server only and is left out of the build for the web.
+
 ## Analytics
 
 Vercel Web Analytics (`src/analytics.ts`, cookieless), on the live site only: the dev server and `?debug` send
@@ -174,7 +183,7 @@ JS for the game, 1.2 MB of art, and ~27 MB of tracking models and wasm (the body
 | `src/game/game.ts` | The flow (title, mouse or hands, camera, practice, Ready / Set / Draw, play, pause, game over), casting, hearts, combo, score, the frame loop. |
 | `src/game/hands.ts` | Hands mode as one piece: camera, tracking, you, the hand pen. |
 | `src/input/hand/` | `camera.ts` (the webcam), `vision.ts` + `vision.worker.ts` + `vision-core.ts` (the body and hand models in two workers), `body.ts` (shoulders, which hand, the box mapped to the screen), `handpen.ts` (point to draw, fist to move), `filters.ts` (RIFT's blade filter), `gesture.ts` (finger poses, for the debug panel). |
-| `src/debug/recorder.ts` | Records hands-mode sessions on the dev server (camera video and logs into `logs/`). |
+| `src/debug/recorder.ts` | Records hands-mode sessions on the dev server only (camera video and logs into `logs/`). |
 | `src/render/player.ts` | You: the cut-out's textures, framing from your face, presence, where the ghosts aim. |
 | `src/render/gl.ts` | A small WebGL renderer: textured quads with three blends, and a second program that draws you through the mask, mirrored and moonlit. The scene, ghosts, you and the top layer all go into one canvas. |
 | `src/render/compositor.ts` | Puts each ghost between the scene's layers by how near it is, with haze, lantern light and a halo. |
@@ -194,6 +203,13 @@ JS for the game, 1.2 MB of art, and ~27 MB of tracking models and wasm (the body
 Draw order: the 11 scene layers back to front, the far ghosts after the mid trees, the middle ones after the back
 graves (under the ground fog), you after the front graves, then the near ghosts; a ghost saying boo goes on top. Then
 the symbols, effects and your stroke over everything, so a symbol is never hidden.
+
+## License
+
+The code is MIT (`LICENSE`). The artwork is not: the ghosts, the graveyard, the symbols, the icons and preview images
+(everything under `public/` that's a picture, and `reference/generated/`) are (c) 2026 RIFT, all rights reserved.
+Hand tracking uses Google's MediaPipe (Apache 2.0), fetched by `npm install`; the font is Fredoka (SIL Open Font
+License).
 
 ## Next
 

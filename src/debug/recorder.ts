@@ -47,6 +47,5 @@ export class Recorder {
   }
 }
 
-/** on the dev server (where there's somewhere to save it), or with ?rec */
-export const recorder: Recorder | null =
-  import.meta.env.DEV || new URLSearchParams(location.search).has('rec') ? new Recorder() : null;
+/** on the dev server only (where there's somewhere to save it): a build for the web never records or sends the camera */
+export const recorder: Recorder | null = import.meta.env.DEV ? new Recorder() : null;
