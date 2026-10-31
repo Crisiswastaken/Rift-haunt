@@ -1,7 +1,8 @@
 /* The misty graveyard (v6b), drawn back to front from its layers. Depth of field, haze and brightness are baked
-   into the images by tools/build_assets.py; what's live is a slow parallax drift, the lanterns' flickering glow and
-   a handful of fireflies. `draw` calls back after each layer so ghosts can be slipped in between them. Drawn with
-   WebGL (render/gl.ts). */
+   into the images by tools/build_assets.py; what's live is the parallax (each layer shifts by its depth with where
+   you're looking from: the mouse, your finger, or your head in hands mode, plus a slow drift), the lanterns'
+   flickering glow and a handful of fireflies. `draw` calls back after each layer so ghosts can be slipped in between
+   them. Drawn with WebGL (render/gl.ts). */
 import manifest from './manifest.json';
 import type { Gl, Tex } from '../render/gl';
 
@@ -24,8 +25,13 @@ interface Firefly {
 
 export const SCENE = manifest as unknown as { canvas: [number, number]; items: SceneItem[]; fireflies: Firefly[] };
 
-/** the canvas cover-fitted to the screen, with a little overscan so the drift never shows an edge */
+/** the canvas cover-fitted to the screen, with enough overscan that the parallax never shows an edge */
 export interface Fit { s: number; ox: number; oy: number }
+
+/** the parallax at depth 1, in canvas pixels: across and up and down for a view from the edge, and the slow drift */
+const PARALLAX = { x: 60, y: 24, drift: 6 };
+/** how quickly the view follows (per second) */
+const FOLLOW = 3.5;
 
 /** a lantern's light on screen, for lighting the ghosts that pass it */
 export interface Light { x: number; y: number; r: number; k: number }
@@ -39,6 +45,8 @@ export class Scene {
   private tex: Tex[];
   private glow: Tex;
   private fly: Tex;
+  /** where the view is from, -1 to 1 each way (eased) */
+  private view = { x: 0, y: 0 };
 
   constructor(private gl: Gl, layers: HTMLImageElement[], glow: HTMLImageElement, fly: HTMLImageElement) {
     this.tex = layers.map(im => gl.texture(im));
@@ -47,7 +55,7 @@ export class Scene {
   }
 
   fit(W: number, H: number): Fit {
-    const [CW, CH] = SCENE.canvas, s = Math.max(W / CW, H / CH) * 1.05;
+    const [CW, CH] = SCENE.canvas, s = Math.max(W / CW, H / CH) * 1.09;
     return { s, ox: (W - CW * s) / 2, oy: (H - CH * s) / 2 };
   }
 
@@ -58,18 +66,32 @@ export class Scene {
     return i;
   }
 
+  /** ease the view toward being from (x, y), each -1 to 1: the pointer, your finger or your head */
+  lookFrom(x: number, y: number, dt: number) {
+    const k = 1 - Math.exp(-dt * FOLLOW);
+    this.view.x += (Math.max(-1, Math.min(1, x)) - this.view.x) * k;
+    this.view.y += (Math.max(-1, Math.min(1, y)) - this.view.y) * k;
+  }
+
+  /** how far a layer at `depth` is shifted, in canvas pixels: nearer layers more, the other way to the view */
+  private shift(depth: number, t: number) {
+    return { x: (Math.sin(t * .15) * PARALLAX.drift - this.view.x * PARALLAX.x) * depth, y: -this.view.y * PARALLAX.y * depth };
+  }
+
   lights(fit: Fit, t: number): Light[] {
-    return this.items.filter(it => it.lantern).map(it => ({
-      x: fit.ox + it.lantern!.x * fit.s, y: fit.oy + it.lantern!.y * fit.s,
-      r: it.lantern!.r * fit.s * 3.2, k: .5 * flicker(t, it.x * .013),
-    }));
+    return this.items.filter(it => it.lantern).map(it => {
+      const d = this.shift(it.depth, t);
+      return {
+        x: fit.ox + (it.lantern!.x + d.x) * fit.s, y: fit.oy + (it.lantern!.y + d.y) * fit.s,
+        r: it.lantern!.r * fit.s * 3.2, k: .5 * flicker(t, it.x * .013),
+      };
+    });
   }
 
   draw(fit: Fit, dpr: number, t: number, after: (i: number) => void) {
     const { s, ox, oy } = fit, k = s * dpr;
     this.items.forEach((it, i) => {
-      // a slow sideways drift, more for nearer layers
-      const px = Math.sin(t * .15) * 8 * it.depth, X = (ox + px * s) * dpr, Y = oy * dpr;
+      const d = this.shift(it.depth, t), X = (ox + d.x * s) * dpr, Y = (oy + d.y * s) * dpr;
       this.gl.draw(this.tex[i], X + it.x * k, Y + it.y * k, it.w * k, it.h * k, it.opacity, it.blend === 'screen' ? 'screen' : 'normal');
       if (it.lantern) this.drawLight(it, t, X, Y, k);
       after(i);

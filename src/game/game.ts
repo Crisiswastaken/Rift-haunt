@@ -96,6 +96,9 @@ export class Game {
   private log: number[][] = [];
   /** the leaderboard is up, over the title or the game-over screen */
   private boardFrom: 'title' | 'over' | null = null;
+  /** where the pointer is, -1 to 1 each way, for the parallax (a finger counts only while it's down) */
+  private aim = { x: 0, y: 0 };
+  private still = matchMedia('(prefers-reduced-motion: reduce)');
   private last = performance.now();
 
   constructor(private view: HTMLCanvasElement, private art: Art, private hud: Hud, private mouse: PointerPen, private music: Music) {
@@ -141,6 +144,15 @@ export class Game {
       // Enter plays from the title and the game-over screen (when a button isn't the one being pressed)
       if (e.key === 'Enter' && (this.mode === 'title' || this.mode === 'over') && !this.boardFrom && !(e.target as HTMLElement).closest?.('button')) void this.play(this.input);
     });
+    // the parallax follows the mouse, or a finger while it's down; a finger lifted, or the mouse gone, lets it settle
+    const aim = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse' && !e.buttons) return;
+      this.aim = { x: e.clientX / innerWidth * 2 - 1, y: e.clientY / innerHeight * 2 - 1 };
+    };
+    addEventListener('pointermove', aim);
+    addEventListener('pointerdown', aim);
+    for (const ev of ['pointerup', 'pointercancel'] as const) addEventListener(ev, e => { if (e.pointerType !== 'mouse') this.aim = { x: 0, y: 0 }; });
+    document.documentElement.addEventListener('mouseleave', () => { this.aim = { x: 0, y: 0 }; });
     // stepping away pauses the run
     addEventListener('blur', () => this.pause());
     document.addEventListener('visibilitychange', () => {
@@ -473,6 +485,9 @@ export class Game {
     // paused, everything holds still, the scene included
     if (this.mode === 'paused') { w.dt = 0; return; }
     this.clock += dt;
+    // the parallax: from your head in hands mode, the pointer otherwise; none for those who'd rather things kept still
+    const from = this.still.matches ? null : this.hands.on ? this.hands.player.head(now) : this.aim;
+    this.scene.lookFrom(from?.x ?? 0, from?.y ?? 0, dt);
     // hit-stop freezes the ghosts for a beat; the scene and your stroke keep going
     w.dt = this.clock < this.stopUntil ? 0 : dt;
     w.t += w.dt;

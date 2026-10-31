@@ -21,19 +21,24 @@ node tools/make_caps.mjs       # rebuild the leaderboard's score ceilings after 
 
 | | |
 |---|---|
-| Ghosts | Fade in just inside the left or right edge or the top corners, at random: random gaps, now and then a quiet spell, sometimes one or two more right behind (mirrored, or sharing a front symbol so one stroke takes them all). Each carries 1 to 4 symbols and floats in on gusts. |
-| Difficulty | Rises with time, not with how fast you clear: `D = 1 - exp(-t / 110)`, then a slow creep (+0.1 a minute, up to 1.4). Gaps shorten, rows lengthen, a few more come at once (never more than 5), and they get a little quicker (never more than 1.35×). |
-| Shapes | Line across and line down from the start, V and roof from 0:15, the circle from 1:00. |
+| Ghosts | The first within a second, then one every 2 s or so to start (about 15 in the first half minute). They fade in just inside the left or right edge or the top corners, at random: random gaps, now and then a quiet spell, sometimes one or two more right behind (mirrored, or sharing a front symbol so one stroke takes them all). Each carries 1 to 4 symbols and floats in on gusts. |
+| Difficulty | Rises with time, not with how fast you clear: `D = 1 - exp(-t / 90)`, then a slow creep (+0.1 a minute, up to 1.4). Gaps shorten, rows lengthen, a few more come at once (3 to start, never more than 5), and they get a little quicker (never more than 1.35×). |
+| Shapes | Line across and line down from the start, V and roof from 0:10, the circle from 0:40. |
 | Hearts | 5. A ghost that reaches you says boo and takes one, then you get a second's grace. |
 | Heart ghost | Floats across the top while you're missing a heart. Draw the heart to win one back. |
-| Storm ghost | A chance from 1:00 when there's a crowd. Draw its bolt and every ghost out there is struck; later its bolt can be behind another symbol. |
-| Big ghost | A chance from 1:40: from the side, 4 or 5 symbols. |
+| Storm ghost | A chance from 0:40 when there's a crowd. Draw its bolt and every ghost out there is struck; later its bolt can be behind another symbol. |
+| Big ghost | A chance from 1:15: from the side, 4 or 5 symbols. |
 | Score | 10 per symbol, times your combo (one more for every 4 strokes in a row that hit, up to ×5), +50 for each extra ghost banished by the same stroke. A stroke that reads as a shape nobody is showing breaks the combo. |
 
 Hands mode is slower than the mouse (ghosts 0.8× as fast, gaps 1.3× as long, one fewer out at once), because drawing
-in the air is. Tuned with a bot that draws one perfect stroke every so often: at 1.15 s a stroke (a quick mouse
-player) it holds out for several minutes, at 1.6 s it goes down around four. All the numbers are in `PACE` in
-`src/config.ts`.
+in the air is. Tuned by simulating players against the real director (each stroke aimed at the most urgent ghost,
+40 runs each): with the mouse, a stroke every 1.15 s (quick) lasts about 3:20, every 1.6 s about 2:00, every 2.2 s
+about 1:15; with hands, a stroke every 1.6 s lasts about 3:15, every 2.2 s about 2:10, every 3 s about 1:25. All the
+numbers are in `PACE` in `src/config.ts`; after changing them, `node tools/make_caps.mjs` updates the leaderboard's
+ceilings.
+
+The graveyard has depth: move the mouse (or a finger, or in hands mode your head) and the near graves and trees
+slide further than the far ones. It keeps still for anyone whose system asks for reduced motion.
 
 Esc or P pauses (so does leaving the tab). Enter plays again from the title and game-over screens. M mutes.
 
@@ -56,7 +61,7 @@ browser says is taken on trust, since anything in the page can be changed from t
 - **A ceiling.** No run can pass what a flawless player could have done in that time. `tools/oracle.ts` plays the real
   director with a bot that strokes every 0.12 s and never misses, rushing or waiting for multi-kills; the most any of
   180 such runs reached at each moment, plus half again, is the cap (`api/_lib/caps.ts`). For mouse & touch that's
-  4,630 at a minute and 30,030 at five; a test checks the caps still sit above fresh flawless runs.
+  7,450 at a minute and 46,580 at five; a test checks the caps still sit above fresh flawless runs.
 - **Names** are tidied and checked on the server for slurs and profanity, including spaced-out, stretched, accented
   and leetspeak spellings (`api/_lib/names.ts`; the word list is ROT13'd and never sent to the browser). Names only
   ever go onto the page as text.
@@ -191,7 +196,7 @@ JS for the game, 1.2 MB of art, and ~27 MB of tracking models and wasm (the body
 | `src/game/fx.ts` | Knocked-off symbols, score pops, bolt strikes, the heart flying home, your stroke as a felt ribbon. Effects move and fade image assets only. |
 | `src/input/recognizer.ts` | Stroke recogniser: straight strokes by angle, the rest by a $P point-cloud match against a family of templates per shape. |
 | `src/input/pointer.ts` | `PointerPen` (mouse, pen, touch) and the `Pen` interface both pens implement. |
-| `src/scene/scene.ts` | The v6b graveyard: 11 layers, lantern glow, fireflies, a slow parallax drift. |
+| `src/scene/scene.ts` | The v6b graveyard: 11 layers, parallax (the mouse, your finger or your head moves the near layers more than the far), lantern glow, fireflies. |
 | `src/audio/beat.ts`, `music.ts` | The score and the live player (lookahead scheduler, mute, muffle). |
 | `src/ui/hud.ts` | Hearts, score, combo, cues, screens, the fingertip firefly and hold-to-press. |
 | `src/ui/board.ts` | The leaderboard in the game: a ticket per run, the save form, the board with its two tabs. |
@@ -210,8 +215,3 @@ The code is MIT (`LICENSE`). The artwork is not: the ghosts, the graveyard, the 
 (everything under `public/` that's a picture, and `reference/generated/`) are (c) 2026 RIFT, all rights reserved.
 Hand tracking uses Google's MediaPipe (Apache 2.0), fetched by `npm install`; the font is Fredoka (SIL Open Font
 License).
-
-## Next
-
-- **Parallax from your head:** every layer already has a `depth`; drive the drift in `Scene.draw` from the face
-  position `Player` already tracks.

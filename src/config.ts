@@ -61,31 +61,31 @@ export const TARGET = { x: .5, y: .46 };
  */
 export const PACE = {
   /** seconds for D to get most of the way up */
-  ramp: 110,
+  ramp: 90,
   /** after that, D keeps creeping by this much a minute, up to maxD */
   creep: .1,
   maxD: 1.4,
   /** the average wait between spawns; each one is random around it (from half to two and a half times) */
-  gap: [3.4, 2.3] as [number, number],
+  gap: [2, 1.5] as [number, number],
   /** now and then a quiet spell of this long */
   lull: { chance: .1, seconds: [3, 5] as [number, number] },
   /** most ghosts out at once (heart ghosts aside) */
-  maxAlive: [2, 5] as [number, number],
+  maxAlive: [3, 5] as [number, number],
   /** approach speed multiplier */
   speed: [1, 1.25] as [number, number],
   /** the average row length, and the longest a plain ghost can carry */
-  symbols: [1.1, 2] as [number, number],
+  symbols: [1.15, 2] as [number, number],
   longest: [2, 4] as [number, number],
   /** a spawn sometimes brings one or two more with it, a moment apart */
-  burst: [0, .2] as [number, number],
+  burst: [.05, .2] as [number, number],
   /** a burst sometimes shares its front symbol, so one stroke can take several */
   shareFront: .4,
   /** when each shape joins (seconds into the run) */
-  unlock: [['dash', 0], ['pillar', 0], ['fang', 15], ['roof', 15], ['moon', 60]] as [SymbolId, number][],
+  unlock: [['dash', 0], ['pillar', 0], ['fang', 10], ['roof', 10], ['moon', 40]] as [SymbolId, number][],
   /** the storm ghost (its bolt clears the screen): a chance per spawn, from `from` s, `cooldown` s apart, with a crowd */
-  storm: { from: 60, chance: .05, cooldown: 35, crowd: 3 },
+  storm: { from: 40, chance: .05, cooldown: 35, crowd: 3 },
   /** the big one */
-  big: { from: 100, chance: .03, cooldown: 80, scale: 1.5, symbols: [4, 5] as [number, number] },
+  big: { from: 75, chance: .03, cooldown: 80, scale: 1.5, symbols: [4, 5] as [number, number] },
   /** air drawing is slower than a mouse: hands mode gets slower ghosts, longer gaps and one fewer out at once */
   hands: { speed: .8, gap: 1.3, maxAlive: -1 },
 };

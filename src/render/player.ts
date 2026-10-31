@@ -92,6 +92,14 @@ export class Player {
   /** camera coordinates (0..1, not mirrored) to stage pixels */
   toScreen = (u: number, v: number): Pt => ({ x: this.ox + (1 - u) * this.iw * this.s, y: this.oy + v * this.ih * this.s });
 
+  /** where your head is in the camera's picture, mirrored like the picture of you: -1 to 1 each way, about 0 when
+      you're in the middle (for the parallax), or null if we haven't seen you lately */
+  head(now: number): Pt | null {
+    const b = this.body;
+    if (!b.lm || now - this.seenT > 1.5) return null;
+    return { x: ((1 - b.lm[NOSE * 4]) - .5) * 4, y: (b.lm[NOSE * 4 + 1] - .4) * 4 };
+  }
+
   /** what the ghosts fly at: your chin, or null if we haven't seen you lately */
   target(now: number): Pt | null {
     const b = this.body;
