@@ -82,10 +82,12 @@ The game is a static site plus one function, made for Vercel:
 3. Optional: `LEADERBOARD_SECRET` to sign tickets with (otherwise one is derived from the Redis token),
    `LEADERBOARD_ADMIN_KEY` (16+ characters) for taking entries off, `LEADERBOARD_ORIGINS` (comma-separated) if the
    game is served through a site other than tryrift.fun.
-4. Set `VITE_SITE_URL` in `.env` to the game's address (it's `https://tryrift.fun/halloween/` now) for link previews.
+4. Add the domain: **haunt.tryrift.fun** (Settings → Domains, then the CNAME it asks for at the DNS host).
+   `VITE_SITE_URL` in `.env` is that address, for link previews.
 
-To serve it under a path of another site, rewrite that path to this project (e.g. `/halloween/:path*` to
-`https://<this-project>.vercel.app/:path*`): the game and its API both use relative URLs. `vercel.json` sets caching
+It works from any path too (the game and its API both use relative URLs): to serve it under another site's path,
+rewrite that path to this project (e.g. `/halloween/:path*` to `https://<this-project>.vercel.app/:path*`), set
+`VITE_SITE_URL` to match and, if that site isn't tryrift.fun, add it to `LEADERBOARD_ORIGINS`. `vercel.json` sets caching
 (a year for the hashed JS and CSS, a week for art and models) and a few security headers.
 
 ## Hands mode
