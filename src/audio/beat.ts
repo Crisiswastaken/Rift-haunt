@@ -1,18 +1,18 @@
-/* The score: spooky and bouncing, made live with Web Audio (no audio files).
-   4/4 at 160 bpm in D minor. A 32-bar cycle (48 s) that loops for good:
-     A   the hook: an original tune over a lament bass, Dm, C, B♭ and A with a flat nine, two bars each
-     A′  the hook again, with glockenspiel, turning up to a high A at the end
-     B   the breather: half-time drums and a slow ghostly counter-line over Gm, Dm, E♭ (the Neapolitan creep) and A,
-         then a snare roll and a riser out of it
-     C   the chaos: a pipe organ and a running square-wave toccata over a chromatic line (D, C♯, C, B, B♭, A), four on
-         the floor, then a stutter, a dive and dead air before the hook comes back
+/* The score: dark synthwave, made live with Web Audio (no audio files).
+   4/4 at 160 bpm in D minor. A 34-bar cycle (51 s) that loops for good:
+     riff    8 bars: a bright staccato arpeggio of stabs over four-on-the-floor kicks (Dm, B♭, Gm, A, two bars each)
+     tear    2 bars: the riff melts down in pitch, a noise cloud swells over a gritty low A, glissandi fall, then a beat
+             of silence
+     soar   16 bars: a near-pure sine lead, high up, holding long notes and sliding between them over warm pads and a
+             legato saw bass that pumps against the kick; the drums keep out of its way
+     storm   8 bars: the lead's first phrase again with the riff under it and the drums back in full, ending on a long
+             slide down an octave into the riff
    Layers come in with `level`:
-     0  a ghostly choir, a drone, wind, a music box playing the tune     (title, game over)
-     1  + a bouncing bass                                                 (a run starts)
-     2  + drums, crashes, fills and risers
-     3  + a theremin takes the tune, glockenspiel, sixteenth hats
-     4  everything a semitone up, the bass and a square lead under the tune driven, claps, a shaker, the choir
-        trembling                                                         (down to your last hearts)
+     0  pads, the lead, soft stabs                                              (title, game over)
+     1  + the bass, the stabs full                                              (a run starts)
+     2  + drums and the pump, crashes, fills and risers
+     3  + sixteenth hats, the stabs doubled an octave up, glass arpeggios and a backbeat under the lead
+     4  everything a semitone up, the bass and stabs driven, claps and a shaker  (down to your last hearts)
    `Beat` schedules one sixteenth at a time on any BaseAudioContext, so it can be rendered offline to check. */
 
 /** a sixteenth at 160 bpm */
@@ -27,116 +27,68 @@ const LETTER: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 
 const midi = (s: string) => 12 * (+s[s.length - 1] + 1) + LETTER[s[0]] + (s[1] === '#' ? 1 : s[1] === 'b' ? -1 : 0);
 
 const HOLD = 0, REST = -1;
-/** a line written one token a sixteenth: a note ('Bb4') starts, '.' holds it, '-' rests. Eight bars. */
-function line(src: string) {
-  const steps = src.trim().split(/\s+/).map(x => x === '.' ? HOLD : x === '-' ? REST : midi(x));
-  if (steps.length !== 8 * BAR) throw new Error(`a line is eight bars, not ${steps.length / BAR}`);
-  return steps;
-}
-/** how many sixteenths the note starting at i lasts */
-function held(steps: number[], i: number) {
-  let n = 1;
-  while (steps[i + n] === HOLD) n++;
-  return n;
+interface Note { note: number; slow: boolean }
+/** a lead line, one token a sixteenth: a note ('Bb4') starts, '~' before it slides there slowly, '.' holds, '-' rests */
+function line(src: string, bars: number): Note[] {
+  const tokens = src.trim().split(/\s+/);
+  if (tokens.length !== bars * BAR) throw new Error(`a line of ${bars} bars has ${tokens.length / BAR}`);
+  return tokens.map(x => ({ note: x === '.' ? HOLD : x === '-' ? REST : midi(x.replace('~', '')), slow: x[0] === '~' }));
 }
 
-const HOOK_HEAD = `
-  D5 . . . . . A4 . F5 . . . E5 . D5 .
-  C#5 . . . D5 . E5 . A4 . . . . . - -
-  C5 . . . . . G4 . E5 . . . D5 . C5 .
-  B4 . . . C5 . D5 . G4 . . . . . - -
-  D5 . . . F5 . Bb5 . . . . . A5 . G5 .
-  F5 . . . D5 . F5 . E5 . . . . . - -`;
-/** A: the tune, ending on its way back to D */
-const HOOK = line(HOOK_HEAD + `
-  G5 . . . F5 . E5 . C#5 . . . Bb4 . C#5 .
-  A4 . . . . . . . . . . . C#5 . E5 .`);
-/** A′: the tune, ending with a swoop up to the high A */
-const HOOK_2 = line(HOOK_HEAD + `
-  Bb5 . . . A5 . G5 . F5 . . . E5 . C#5 .
-  A4 . . . . . . . A5 . . . . . - -`);
-/** B: long, slow notes, for the theremin only */
-const GHOST = line(`
-  G5 . . . . . . . . . . . F5 . D5 .
-  Bb4 . . . . . . . . . . . - - - -
-  A4 . . . . . . . D5 . . . . . F5 .
-  E5 . . . . . . . . . . . - - - -
-  G5 . . . . . . . . . . . F5 . Eb5 .
-  D5 . . . . . . . . . . . Bb4 . . .
-  C#5 . . . . . . . E5 . . . . . . .
-  Bb5 . . . . . . . A5 . . . . . - -`);
-
-/** C: four notes that run under a pedal note sounding every other sixteenth, a bar at a time */
-const TOCCATA: [number[], number][] = [
-  [[81, 77, 74, 77], 86], [[81, 77, 73, 77], 86], [[81, 77, 72, 77], 86], [[81, 77, 71, 77], 86],
-  [[77, 74, 70, 74], 86], [[79, 76, 74, 76], 86], [[79, 76, 73, 76], 85], [[82, 79, 76, 73], 85],
-];
+const PHRASE = `
+  A5 . . . ~D6 . . . . . . . . . . .
+  . . . . . . . . E6 . . . F6 . . .
+  D6 . . . ~F6 . . . . . . . . . . .
+  . . . . . . . . G6 . . . A6 . . .
+  ~C7 . . . . . . . . . . . . . . .
+  . . . . . . . . A6 . . . . . . .`;
+const SOAR = line(PHRASE + `
+  ~G6 . . . . . . . . . . . E6 . . .
+  ~C#6 . . . . . . . . . . . - - - -
+  A5 . . . ~D6 . . . . . . . . . . .
+  . . . . . . . . F6 . . . E6 . . .
+  D6 . . . . . . . . . . . . . . .
+  . . . . . . . . ~Bb6 . . . . . . .
+  . . . . . . . . A6 . . . G6 . . .
+  ~D6 . . . . . . . . . . . . . . .
+  E6 . . . . . . . C#6 . . . . . . .
+  ~A6 . . . . . . . . . . . - - - -`, 16);
+const STORM = line(PHRASE + `
+  ~G6 . . . . . . . . . . . E6 . . .
+  A6 . . . . . . . ~A5 . . . . . - -`, 8);
 
 interface Chord {
   /** the bass's root */
   root: number;
-  /** for the choir, the organ and the arpeggios */
-  notes: number[];
+  pad: number[];
+  /** the riff's notes, low to high */
+  stab: number[];
 }
-const Dm: Chord = { root: 38, notes: [57, 62, 65, 69] };
-const C: Chord = { root: 36, notes: [55, 60, 64, 67] };
-const Bb: Chord = { root: 34, notes: [53, 58, 62, 65] };
-const A7: Chord = { root: 33, notes: [55, 61, 64, 69] };
-const A7b9: Chord = { root: 33, notes: [55, 61, 64, 70] };
-const Gm: Chord = { root: 31, notes: [55, 58, 62, 67] };
-const Eb: Chord = { root: 39, notes: [55, 58, 63, 67] };
-// section C's line cliché: D minor over a bass falling a semitone a bar
-const DmC_: Chord = { root: 37, notes: [57, 61, 65, 69] };
-const DmC: Chord = { root: 36, notes: [57, 60, 65, 69] };
-const Bo: Chord = { root: 35, notes: [57, 59, 62, 65] };
-const Bb11: Chord = { root: 34, notes: [58, 62, 64, 67] };
+const Dm: Chord = { root: 38, pad: [57, 62, 65, 69], stab: [57, 62, 65, 69, 74] };
+const Bb: Chord = { root: 34, pad: [58, 62, 65, 70], stab: [58, 62, 65, 70, 74] };
+const Gm: Chord = { root: 31, pad: [55, 58, 62, 67], stab: [58, 62, 67, 70, 74] };
+const F: Chord = { root: 41, pad: [57, 60, 65, 69], stab: [57, 60, 65, 69, 72] };
+const A: Chord = { root: 33, pad: [57, 61, 64, 67], stab: [57, 61, 64, 69, 73] };
 
-/** the bass, a bar a token: R root, r a softer root, O its octave, F its fifth, A a step into the next chord's root */
-const GROOVE: [string, string] = ['R.Or..R.R.Or.rF.', 'R.Or..R.R.OrF.A.'];
-const HALF: [string, string] = ['R.......O..r..F.', 'R.......O..r..A.'];
-const DRIVE: [string, string] = ['R.rOR.rOR.rOR.rO', 'R.rOR.rOR.rOR.rO'];
+/** the riff, an eighth at a time over a chord's two bars, as indices into its stab notes; accents fall 3+3+2 */
+const RIFF = [[1, 3, 4, 3, 2, 3, 4, 3], [0, 2, 3, 2, 4, 3, 2, 1]];
+/** the glass arpeggio's order over a pad chord */
+const ARP = [0, 1, 2, 3, 2, 1, 2, 3];
 
-interface Section {
-  chords: Chord[];
-  /** the theremin's line */
-  line?: number[];
-  /** the line is the tune, which the music box plays until the theremin comes in */
-  hook?: boolean;
-  /** the glockenspiel arpeggiates the chords from level 3 (where there's no hook, the music box does before that) */
-  bells?: boolean;
-  /** the organ and toccata instead of the choir */
-  chaos?: boolean;
-  /** a chord's first bar, then its second */
-  bass: [string, string];
-  drums: 'groove' | 'half' | 'four';
-  crash?: boolean;
-}
-const SECTIONS: Section[] = [
-  { chords: [Dm, Dm, C, C, Bb, Bb, A7b9, A7b9], line: HOOK, hook: true, bass: GROOVE, drums: 'groove', crash: true },
-  { chords: [Dm, Dm, C, C, Bb, Bb, A7b9, A7b9], line: HOOK_2, hook: true, bells: true, bass: GROOVE, drums: 'groove' },
-  { chords: [Gm, Gm, Dm, Dm, Eb, Eb, A7, A7b9], line: GHOST, bells: true, bass: HALF, drums: 'half', crash: true },
-  { chords: [Dm, DmC_, DmC, Bo, Bb, Bb11, A7, A7b9], chaos: true, bass: DRIVE, drums: 'four', crash: true },
+type Kind = 'riff' | 'tear' | 'soar' | 'storm';
+const SECTIONS: { kind: Kind; chords: Chord[]; line?: Note[] }[] = [
+  { kind: 'riff', chords: [Dm, Dm, Bb, Bb, Gm, Gm, A, A] },
+  { kind: 'tear', chords: [A, A] },
+  { kind: 'soar', chords: [Dm, Dm, Bb, Bb, F, F, A, A, Dm, Dm, Bb, Bb, Gm, Gm, A, A], line: SOAR },
+  { kind: 'storm', chords: [Dm, Dm, Bb, Bb, F, F, A, A], line: STORM },
 ];
-/** arpeggio orders over a chord's four notes, by eighth; the cycles take turns */
-const ARPS = [[0, 1, 2, 3, 2, 1, 2, 3], [3, 1, 2, 0, 2, 1, 3, 1]];
-/** the drone: a low D, a twin beating slowly against it, and the A */
-const DRONE = [26, 26.08, 33];
-/** organ pipes as harmonics of the 16′ rank: 16′, 8′, 5⅓′, 4′, 2⅔′, 2′ */
-const PIPES = [0, .7, 1, .25, .55, 0, .35, 0, .4];
+const CYCLE = SECTIONS.reduce((n, s) => n + s.chords.length, 0);
 
-function bassNote(token: string, root: number, next: number) {
-  switch (token) {
-    case 'O': return root + 12;
-    case 'F': return root + 7;
-    // chromatic, from below unless that's where the bass already is
-    case 'A': return next === root ? root + 7 : next - 1 !== root ? next - 1 : next + 1;
-    default: return root;
-  }
-}
+type Bus = 'drums' | 'bass' | 'grit' | 'lead' | 'stab' | 'crunch' | 'pad' | 'glass' | 'fx';
 
-type Bus = 'drums' | 'bass' | 'grit' | 'lead' | 'chip' | 'fuzz' | 'box' | 'bell' | 'choir' | 'organ' | 'drone' | 'air';
-
-interface Theremin { osc: OscillatorNode[]; amp: GainNode; vibrato: GainNode; on: boolean; note: number }
+interface Lead { osc: OscillatorNode[]; amp: GainNode; trim: GainNode; vibrato: GainNode; on: boolean; note: number }
+/** the lead's partials: a sine, a whisper of its octave, and a slightly sharp twin for width */
+const PARTIALS: [number, number, number][] = [[1, 1, 0], [2, .06, 0], [1, .22, 9]];
 
 export class Beat {
   level = 0;
@@ -144,33 +96,23 @@ export class Beat {
   readonly out: GainNode;
   private noise: AudioBuffer;
   private bus: Record<Bus, GainNode>;
+  /** the bass and pads duck under each kick */
+  private pump: GainNode;
   private verb: ConvolverNode;
   private gate: ConvolverNode;
   private echo: DelayNode;
-  private pulse: PeriodicWave;
-  private pipes: PeriodicWave;
-  /** the drone, the wind and the theremin run for good once started */
-  private drone: OscillatorNode[] | null = null;
-  private wind: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
-  private theremin: Theremin | null = null;
+  private lead: Lead | null = null;
   private shift = 0;
 
   constructor(private ctx: BaseAudioContext) {
     const c = ctx;
     this.out = c.createGain();
+    this.pump = c.createGain();
+    this.pump.connect(this.out);
 
     this.noise = c.createBuffer(1, Math.round(c.sampleRate * 2.5), c.sampleRate);
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-
-    // a square with a 25% duty, the old consoles' reedy lead
-    const n = 48, re = new Float32Array(n), im = new Float32Array(n);
-    for (let i = 1; i < n; i++) {
-      re[i] = Math.sin(2 * Math.PI * i * .25) / (Math.PI * i);
-      im[i] = 2 * Math.sin(Math.PI * i * .25) ** 2 / (Math.PI * i);
-    }
-    this.pulse = c.createPeriodicWave(re, im);
-    this.pipes = c.createPeriodicWave(new Float32Array(PIPES.length), Float32Array.from(PIPES));
 
     // a big dark hall
     this.verb = c.createConvolver();
@@ -185,46 +127,40 @@ export class Beat {
     gOut.gain.value = .45;
     this.gate.connect(gOut).connect(this.out);
 
-    // a dotted-eighth echo for the tunes and bells
+    // a dotted-eighth echo for the lead and the stabs
     this.echo = c.createDelay(1);
     this.echo.delayTime.value = STEP * 3;
     const fb = c.createGain(), tone = c.createBiquadFilter(), wet = c.createGain();
-    fb.gain.value = .35; tone.type = 'lowpass'; tone.frequency.value = 3000; wet.gain.value = .3;
+    fb.gain.value = .35; tone.type = 'lowpass'; tone.frequency.value = 3500; wet.gain.value = .3;
     this.echo.connect(tone).connect(fb).connect(this.echo);
     tone.connect(wet).connect(this.out);
     const verbSend = c.createGain();
     verbSend.gain.value = .3;
     tone.connect(verbSend).connect(this.verb);
 
-    const bus = (gain: number, send: number, echo = 0) => {
+    const bus = (gain: number, send: number, echo = 0, to: AudioNode = this.out) => {
       const g = c.createGain();
       g.gain.value = gain;
-      g.connect(this.out);
+      g.connect(to);
       if (send) { const s = c.createGain(); s.gain.value = send; g.connect(s).connect(this.verb); }
       if (echo) { const s = c.createGain(); s.gain.value = echo; g.connect(s).connect(this.echo); }
       return g;
     };
     /** a bus through a soft clipper, for the last hearts */
-    const driven = (gain: number, send: number, drive: number, tone: number) => {
+    const driven = (gain: number, send: number, drive: number, tone: number, to: AudioNode = this.out) => {
       const into = c.createGain(), shaper = c.createWaveShaper(), lp = c.createBiquadFilter();
       const curve = new Float32Array(1024);
       for (let i = 0; i < curve.length; i++) curve[i] = Math.tanh((i / 511.5 - 1) * drive) / Math.tanh(drive);
       shaper.curve = curve; shaper.oversample = '2x';
       lp.type = 'lowpass'; lp.frequency.value = tone;
-      into.connect(shaper).connect(lp).connect(bus(gain, send));
+      into.connect(shaper).connect(lp).connect(bus(gain, send, 0, to));
       return into;
     };
     this.bus = {
-      drums: bus(.8, .08), bass: bus(.5, .04), grit: driven(.36, .04, 3, 2400),
-      lead: bus(.085, .35, .35), chip: bus(1.2, .2, .25), fuzz: driven(.32, .25, 4, 3200),
-      box: bus(.9, .45, .45), bell: bus(.8, .45, .3),
-      choir: bus(2.2, .6), organ: bus(.75, .75), drone: bus(.2, .3), air: bus(.16, .5),
+      drums: bus(.8, .08), bass: bus(.5, .04, 0, this.pump), grit: driven(.22, .05, 3, 2000, this.pump),
+      lead: bus(.115, .45, .3), stab: bus(1, .25, .2), crunch: driven(.55, .25, 3, 4500),
+      pad: bus(1, .5, 0, this.pump), glass: bus(.55, .45, .3), fx: bus(.8, .8),
     };
-    // a slow tremulant on the organ
-    const trem = c.createOscillator(), depth = c.createGain();
-    trem.frequency.value = 5.5; depth.gain.value = .06;
-    trem.connect(depth).connect(this.bus.organ.gain);
-    trem.start();
   }
 
   private impulse(seconds: number, decay: number, gated: boolean) {
@@ -241,202 +177,143 @@ export class Beat {
 
   /** play sixteenth n (from the start) at time t */
   step(n: number, t: number) {
-    const s = n % BAR, bar = Math.floor(n / BAR), b = bar % 8, cycle = Math.floor(bar / 32);
-    if (!this.drone) this.begin(t);
+    const s = n % BAR, bar = Math.floor(n / BAR);
+    if (!this.lead) this.begin(t);
     if (s === 0) this.newBar(t);
-    const L = this.level, k = this.shift, si = Math.floor(bar / 8) % 4, sec = SECTIONS[si], chord = sec.chords[b];
-    const next = b < 7 ? sec.chords[b + 1] : SECTIONS[(si + 1) % 4].chords[0], at = b * BAR + s;
-    // the end of C: a stutter on beat three, then nothing but a swell back into the hook
-    const gap = sec.chaos && b === 7;
+    const L = this.level, k = this.shift;
+    let b = bar % CYCLE, si = 0;
+    while (b >= SECTIONS[si].chords.length) b -= SECTIONS[si++].chords.length;
+    const sec = SECTIONS[si], chord = sec.chords[b], last = b === sec.chords.length - 1;
+
+    if (sec.kind === 'tear') { this.tear(chord, b, s, t, L, k); return; }
 
     if (s === 0) {
-      if (sec.chaos) this.organ(t, chord.notes.map(m => m + k), (gap ? 12 : BAR) * STEP, L ? 1 : .6);
-      else if (b % 2 === 0) this.choir(t, chord.notes.map(m => m + k), 2 * BAR * STEP, L >= 4);
-    }
-    if (gap && s >= 12) {
-      if (s === 12) this.swell(t, 4 * STEP);
-      return;
-    }
-
-    // the tune, or the ghost's line
-    const note = sec.line?.[at];
-    if (note !== undefined && note !== HOLD) {
-      if (L >= 3) {
-        if (note === REST) this.hush(t);
-        else {
-          this.sing(t, note + k);
-          if (L >= 4 && sec.hook) this.chip(t, note + k - 12, held(sec.line!, at) * STEP - .02, .7, true);
-        }
-      } else if (sec.hook && note !== REST) this.box(t, note + k + 12, L ? 1 : .75);
-    }
-
-    // arpeggios: glockenspiel, or the music box where there's no tune for it
-    if (s % 2 === 0 && !sec.chaos) {
-      const m = chord.notes[ARPS[cycle % 2][s / 2]] + k;
-      if (L >= 3 && sec.bells) this.bell(t, m + 24, sec.hook ? .5 : .8);
-      else if (L < 3 && !sec.hook && (L > 0 || s % 4 === 0)) this.box(t, m + 12, L ? .7 : .6);
-    }
-
-    if (sec.chaos) {
-      const [cell, pedal] = TOCCATA[b];
-      if (gap && s >= 8) {
-        // the stutter: the run dives in thirty-seconds
-        if (L >= 3) for (const half of [0, 1]) this.chip(t + half * STEP / 2, cell[0] + k - (s - 8) * 2 - half, STEP / 2 - .01, .8, L >= 4);
-      } else if (L >= 3) this.chip(t, (s % 2 ? pedal : cell[(s >> 1) % 4]) + k, STEP * .85, s % 4 === 0 ? 1 : .7, L >= 4);
-      else if (s % 2 === 0) this.box(t, cell[(s >> 1) % 4] + k, .55);
-    }
-
-    if (L >= 1) {
-      if (gap && s >= 8) { if (s === 8) this.bass(t, chord.root + k + 12, 1, L >= 4, 4 * STEP); }
-      else {
-        const token = sec.bass[b % 2][s];
-        if (token !== '.') this.bass(t, bassNote(token, chord.root, next.root) + k, token === 'R' ? 1 : token === 'r' ? .6 : .8, L >= 4);
+      if (b === 0 && L >= 2) this.crash(t);
+      if (b % 2 === 0) {
+        this.pad(t, chord.pad.map(m => m + k), 2 * BAR * STEP);
+        if (L >= 1 && sec.kind !== 'riff') this.bassNote(t, chord.root + k, 2 * BAR * STEP, L >= 4);
       }
+      if (last && L >= 2 && sec.kind !== 'riff') this.riser(t, BAR * STEP);
     }
 
-    if (L >= 2) this.drums(sec, b, s, t, L, cycle);
+    const note = sec.line?.[b * BAR + s];
+    if (note && note.note !== HOLD) {
+      if (note.note === REST) this.hush(t);
+      else this.sing(t, note.note + k, note.slow);
+    }
+
+    // the riff
+    if (sec.kind !== 'soar' && s % 2 === 0) {
+      const e = s / 2, m = chord.stab[RIFF[b % 2][e]] + k;
+      const v = (e === 0 || e === 3 || e === 6 ? 1 : .7) * (L === 0 ? .5 : sec.kind === 'storm' ? .7 : 1);
+      this.stab(t, m, v, L === 0, L >= 4);
+      if (L >= 3) this.stab(t, m + 12, v * .3, false, false);
+    }
+    // under the riff, the bass punches on the beat
+    if (sec.kind === 'riff' && L >= 1 && s % 4 === 0) this.bass(t, chord.root + k, s === 0 ? 1 : .8, L >= 4);
+    // glass under the lead
+    if (sec.kind === 'soar' && L >= 3 && s % 2 === 0) this.glass(t, chord.pad[ARP[s / 2]] + 12 + k, s % 4 === 0 ? 1 : .7);
+
+    if (L >= 2) this.drums(sec.kind, last, b, s, t, L);
   }
 
   private newBar(t: number) {
     this.level = this.want;
-    const k = this.level >= 4 ? 1 : 0, th = this.theremin!;
+    const k = this.level >= 4 ? 1 : 0, lead = this.lead!;
     if (k !== this.shift) {
-      // the dread: everything up a semitone, the drone and a held theremin note sliding with it
-      this.drone!.forEach((o, i) => o.frequency.setTargetAtTime(hz(DRONE[i] + k), t, .2));
-      if (th.on) {
-        th.note += k - this.shift;
-        for (const o of th.osc) o.frequency.setTargetAtTime(hz(th.note), t, .05);
+      // the dread: everything up a semitone, a held lead note sliding with it
+      if (lead.on) {
+        lead.note += k - this.shift;
+        lead.osc.forEach((o, i) => o.frequency.setTargetAtTime(hz(lead.note) * PARTIALS[i][0], t, .05));
       }
       this.shift = k;
     }
-    if (this.level < 3) this.hush(t);
-    // the wind howls on the title and drops under the band
-    this.wind!.gain.gain.setTargetAtTime(this.level ? .3 : 1, t, 1.5);
+    // softer over the title
+    lead.trim.gain.setTargetAtTime(this.level ? 1 : .65, t, .5);
   }
 
-  private drums(sec: Section, b: number, s: number, t: number, L: number, cycle: number) {
-    if (s === 0 && b === 0 && sec.crash) this.crash(t);
-    switch (sec.drums) {
-      case 'four':
-        if (b === 7 && s >= 8) {
-          // the stutter: the snare in thirty-seconds, climbing
-          for (const half of [0, 1]) this.snare(t + half * STEP / 2, .35 + (s - 8 + half / 2) * .16);
-          return;
-        }
-        if (s % 4 === 0) this.kick(t);
-        if (s === 4 || s === 12) this.backbeat(t, L);
-        if (s % 4 === 2) this.hat(t, .5, true);
-        else if (L >= 3) this.hat(t, s % 2 ? .22 : .38);
-        break;
-      case 'half':
-        if (b === 7) {
-          // a roll into C: eighths, then sixteenths, louder all the way
-          if (s % 4 === 0) this.kick(t);
-          if (s >= 8 || s % 2 === 0) this.snare(t, .3 + .7 * s / 15);
-          if (s === 0) this.riser(t, BAR * STEP);
-          return;
-        }
-        if (s === 0 || s === 6 || (b === 6 && s === 12)) this.kick(t);
-        if (s === 8) this.backbeat(t, L);
-        if (s % 2 === 0) this.hat(t, s % 4 === 0 ? .45 : .3);
-        else if (L >= 3) this.hat(t, .15);
-        break;
-      default:
-        if (b === 7 && s >= 12) {
-          // a fill to turn the eight bars: toms, or every other time round a run on the snare
-          if (cycle % 2 === 0) this.tom(t, [57, 53, 50, 45][s - 12]);
-          else this.snare(t, .45 + (s - 12) * .18);
-          return;
-        }
-        if (s === 0 || s === 6 || s === 8 || (b % 2 === 1 && s === 14)) this.kick(t);
-        if (s === 4 || s === 12) this.backbeat(t, L);
-        if (L >= 3 && b % 2 === 1 && s === 14) this.hat(t, .5, true);
-        else if (s % 2 === 0) this.hat(t, s % 4 === 0 ? .55 : .4);
-        else if (L >= 3) this.hat(t, .2);
+  /** the two bars between riff and soar: everything comes apart */
+  private tear(chord: Chord, b: number, s: number, t: number, L: number, k: number) {
+    if (b === 0) {
+      if (s === 0) {
+        this.bassNote(t, chord.root + k, 28 * STEP, true);
+        this.cloud(t, 2 * BAR * STEP);
+        if (L >= 2) this.kick(t);
+      }
+      // the riff keeps going, sagging further out of tune each note
+      if (s % 2 === 0) this.stab(t, chord.stab[RIFF[0][s / 2]] + k - s * .1, L ? .8 : .5, L === 0, L >= 4, true);
+    } else {
+      if (s === 0) this.fall(t);
+      // a cymbal backwards, cut off a moment before the soar
+      if (s === 6) this.swell(t, 7 * STEP);
     }
-    if (L >= 4 && s % 2 === 1) this.shaker(t, s % 4 === 3 ? 1 : .6);
   }
 
-  private backbeat(t: number, L: number) {
-    this.snare(t);
-    if (L >= 4) this.clap(t);
+  private drums(kind: Kind, last: boolean, b: number, s: number, t: number, L: number) {
+    if (kind === 'soar') {
+      if (s === 0 || s === 8 || (L >= 3 && b % 2 === 1 && s === 14)) this.kick(t, .5);
+      if (L >= 3 && (s === 4 || s === 12)) { this.snare(t, .4); if (L >= 4) this.clap(t); }
+      this.shaker(t, s % 4 === 2 ? .6 : s % 2 ? .3 : .4);
+      if (L >= 4 && s % 4 === 2) this.hat(t, .35, true);
+      return;
+    }
+    // riff and storm: four on the floor; the riff's last two beats a snare run
+    if (kind === 'riff' && last && s >= 8) {
+      if (s % 4 === 0) this.kick(t);
+      this.snare(t, .35 + (s - 8) * .09);
+      return;
+    }
+    if (s % 4 === 0) this.kick(t);
+    if (s === 4 || s === 12) { this.snare(t); if (L >= 4) this.clap(t); }
+    if (s % 4 === 2) this.hat(t, .5);
+    else if (L >= 3 && s % 2 === 1) this.hat(t, .25);
+    if (L >= 4 && s % 2 === 1) this.shaker(t, .7);
   }
 
-  /* ---------- the ones that run for good ---------- */
+  /* ---------- the lead: one voice that runs for good, gliding from note to note ---------- */
 
   private begin(t: number) {
-    const c = this.ctx;
-    // the drone: three saws through a dark filter
-    const lp = c.createBiquadFilter(), gain = c.createGain();
-    lp.type = 'lowpass'; lp.frequency.value = 160;
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(.2, t + 3);
-    lp.connect(gain).connect(this.bus.drone);
-    this.drone = DRONE.map(m => {
-      const o = c.createOscillator();
-      o.type = 'sawtooth'; o.frequency.value = hz(m);
-      o.connect(lp); o.start(t);
-      return o;
-    });
-
-    // the wind: noise through a band that wanders, in gusts
-    const src = c.createBufferSource(), bp = c.createBiquadFilter(), sweep = c.createOscillator(), sweepDepth = c.createGain();
-    src.buffer = this.noise; src.loop = true;
-    bp.type = 'bandpass'; bp.frequency.value = 520; bp.Q.value = 3;
-    sweep.frequency.value = .07; sweepDepth.gain.value = 320;
-    sweep.connect(sweepDepth).connect(bp.frequency);
-    const gust = c.createOscillator(), gustDepth = c.createGain(), gusts = c.createGain(), wind = c.createGain();
-    gust.frequency.value = .043; gustDepth.gain.value = .45; gusts.gain.value = .55;
-    gust.connect(gustDepth).connect(gusts.gain);
-    wind.gain.setValueAtTime(0, t);
-    wind.gain.setTargetAtTime(1, t, 1);
-    src.connect(bp).connect(gusts).connect(wind).connect(this.bus.air);
-    src.start(t); sweep.start(t); gust.start(t);
-    this.wind = { src, gain: wind };
-
-    // the theremin: one voice that glides from note to note, its vibrato blooming as a note holds
-    const amp = c.createGain(), tone = c.createBiquadFilter(), lfo = c.createOscillator(), vibrato = c.createGain();
+    const c = this.ctx, amp = c.createGain(), trim = c.createGain(), tone = c.createBiquadFilter(), lfo = c.createOscillator();
+    const vibrato = c.createGain();
     amp.gain.value = 0;
-    tone.type = 'lowpass'; tone.frequency.value = 2600;
-    lfo.frequency.value = 5.6; vibrato.gain.value = 0;
+    tone.type = 'lowpass'; tone.frequency.value = 5000;
+    lfo.frequency.value = 5; vibrato.gain.value = 0;
     lfo.connect(vibrato);
-    const osc = (['sine', 'triangle'] as const).map((type, i) => {
+    const osc = PARTIALS.map(([mul, gain, det]) => {
       const o = c.createOscillator(), g = c.createGain();
-      o.type = type; o.frequency.value = hz(74);
+      o.frequency.value = hz(86) * mul; o.detune.value = det;
       vibrato.connect(o.detune);
-      g.gain.value = i ? .35 : 1;
+      g.gain.value = gain;
       o.connect(g).connect(tone);
       o.start(t);
       return o;
     });
-    tone.connect(amp).connect(this.bus.lead);
+    tone.connect(amp).connect(trim).connect(this.bus.lead);
     lfo.start(t);
-    this.theremin = { osc, amp, vibrato, on: false, note: 74 };
+    this.lead = { osc, amp, trim, vibrato, on: false, note: 86 };
   }
 
-  private sing(t: number, note: number) {
-    const th = this.theremin!, f = hz(note), leap = Math.abs(note - th.note);
-    for (const o of th.osc) {
-      if (th.on) o.frequency.setTargetAtTime(f, t, leap >= 7 ? .07 : .025);
+  private sing(t: number, note: number, slow: boolean) {
+    const lead = this.lead!, f = hz(note);
+    lead.osc.forEach((o, i) => {
+      const target = f * PARTIALS[i][0];
+      if (lead.on) o.frequency.setTargetAtTime(target, t, slow ? .1 : .03);
       // from silence, a little scoop up into the note
-      else { o.frequency.setValueAtTime(f * .96, t); o.frequency.setTargetAtTime(f, t, .035); }
-    }
-    th.vibrato.gain.setTargetAtTime(3, t, .02);
-    th.vibrato.gain.setTargetAtTime(30, t + .2, .3);
-    if (th.on) {
-      // a breath between notes
-      th.amp.gain.setTargetAtTime(.6, t, .006);
-      th.amp.gain.setTargetAtTime(1, t + .03, .03);
-    } else th.amp.gain.setTargetAtTime(1, t, .025);
-    th.on = true;
-    th.note = note;
+      else { o.frequency.setValueAtTime(target * .97, t); o.frequency.setTargetAtTime(target, t, .04); }
+    });
+    // only a touch of vibrato, and only once a note has held a while
+    lead.vibrato.gain.setTargetAtTime(0, t, .03);
+    lead.vibrato.gain.setTargetAtTime(9, t + .35, .3);
+    if (!lead.on) lead.amp.gain.setTargetAtTime(1, t, .03);
+    lead.on = true;
+    lead.note = note;
   }
 
   private hush(t: number) {
-    const th = this.theremin!;
-    if (!th.on) return;
-    th.amp.gain.setTargetAtTime(0, t, .07);
-    th.on = false;
+    const lead = this.lead!;
+    if (!lead.on) return;
+    lead.amp.gain.setTargetAtTime(0, t, .08);
+    lead.on = false;
   }
 
   /* ---------- voices ---------- */
@@ -456,144 +333,132 @@ export class Beat {
     return src;
   }
 
-  /** a music box: a bright FM tine ringing out, a little out of tune like an old one */
-  private box(t: number, note: number, v: number) {
-    const c = this.ctx, f = hz(note), car = c.createOscillator(), mod = c.createOscillator(), idx = c.createGain();
-    car.frequency.value = f;
-    car.detune.value = (Math.random() - .5) * 16;
-    mod.frequency.value = f * 4;
-    idx.gain.setValueAtTime(f * 1.2, t);
-    idx.gain.setTargetAtTime(0, t, .06);
-    mod.connect(idx).connect(car.frequency);
-    car.connect(this.env(t, .12 * v, .002, 1.8)).connect(this.bus.box);
-    // and the clink: an inharmonic partial that dies fast
-    const p = c.createOscillator();
-    p.frequency.value = f * 5.4;
-    p.connect(this.env(t, .025 * v, .001, .2)).connect(this.bus.box);
-    for (const o of [car, mod, p]) { o.start(t); o.stop(t + 2); }
+  /** a staccato stab: a saw and a square through a filter that snaps shut; `sag` droops each one flat */
+  private stab(t: number, note: number, v: number, soft: boolean, crunch: boolean, sag = false) {
+    const c = this.ctx, f = hz(note), lp = c.createBiquadFilter(), g = this.env(t, .16 * v, .002, .22);
+    lp.type = 'lowpass'; lp.Q.value = 2;
+    lp.frequency.setValueAtTime(soft ? 1800 : 6000, t);
+    lp.frequency.setTargetAtTime(soft ? 700 : 1100, t, .05);
+    lp.connect(g).connect(crunch ? this.bus.crunch : this.bus.stab);
+    for (const [type, det] of [['sawtooth', -6], ['square', 6]] as const) {
+      const o = c.createOscillator();
+      o.type = type; o.frequency.value = f; o.detune.value = det;
+      if (sag) o.detune.linearRampToValueAtTime(det - 90, t + .25);
+      o.connect(lp);
+      o.start(t); o.stop(t + .3);
+    }
   }
 
-  /** a glockenspiel: FM at an inharmonic ratio, for the metal */
-  private bell(t: number, note: number, v: number) {
-    const c = this.ctx, f = hz(note), car = c.createOscillator(), mod = c.createOscillator(), idx = c.createGain();
-    car.frequency.value = f;
-    mod.frequency.value = f * 3.5;
-    idx.gain.setValueAtTime(f * 1.8, t);
-    idx.gain.setTargetAtTime(0, t, .1);
-    mod.connect(idx).connect(car.frequency);
-    car.connect(this.env(t, .09 * v, .002, 1.1)).connect(this.bus.bell);
-    for (const o of [car, mod]) { o.start(t); o.stop(t + 1.4); }
-  }
-
-  /** the square lead: plucked for the toccata, held under the tune at the end */
-  private chip(t: number, note: number, dur: number, v: number, fuzz: boolean) {
-    const c = this.ctx, o = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain();
-    o.setPeriodicWave(this.pulse);
-    o.frequency.value = hz(note);
-    lp.type = 'lowpass'; lp.frequency.value = 2600;
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(.13 * v, t + .003);
-    g.gain.setTargetAtTime(.08 * v, t + .003, .04);
-    g.gain.setTargetAtTime(0, t + dur, .02);
-    o.connect(lp).connect(g).connect(fuzz ? this.bus.fuzz : this.bus.chip);
-    o.start(t); o.stop(t + dur + .15);
-  }
-
-  /** a saw and a square through a plucked filter, a clean sub under them; `dive` drops it two octaves over that long */
-  private bass(t: number, note: number, v: number, grit: boolean, dive = 0) {
-    const c = this.ctx, f = hz(note), end = dive ? t + dive * 2 : t + .3, lp = c.createBiquadFilter();
-    const g = this.env(t, .5 * v, .004, dive ? dive * 1.5 : .2);
-    lp.type = 'lowpass'; lp.Q.value = 5;
+  /** a short bass note on the beat: a saw and a square through a plucked filter, a clean sub under them */
+  private bass(t: number, note: number, v: number, grit: boolean) {
+    const c = this.ctx, f = hz(note), lp = c.createBiquadFilter(), g = this.env(t, .5 * v, .004, .3);
+    lp.type = 'lowpass'; lp.Q.value = 4;
     lp.frequency.setValueAtTime(240, t);
-    lp.frequency.linearRampToValueAtTime(240 + 1100 * v, t + .012);
-    lp.frequency.setTargetAtTime(200, t + .015, .07);
+    lp.frequency.linearRampToValueAtTime(240 + 900 * v, t + .012);
+    lp.frequency.setTargetAtTime(220, t + .015, .07);
     lp.connect(g).connect(grit ? this.bus.grit : this.bus.bass);
-    const pitch = (o: OscillatorNode) => {
-      o.frequency.setValueAtTime(f, t);
-      if (dive) o.frequency.exponentialRampToValueAtTime(f / 4, t + dive);
-    };
     for (const [type, det] of [['sawtooth', -7], ['square', 7]] as const) {
       const o = c.createOscillator();
-      o.type = type; o.detune.value = det; pitch(o);
+      o.type = type; o.frequency.value = f; o.detune.value = det;
+      o.connect(lp);
+      o.start(t); o.stop(t + .4);
+    }
+    const sub = c.createOscillator();
+    sub.frequency.value = f;
+    sub.connect(this.env(t, .4 * v, .004, .32)).connect(this.bus.bass);
+    sub.start(t); sub.stop(t + .4);
+  }
+
+  /** a held bass note: two saws and a sub under a dark filter, for `dur` */
+  private bassNote(t: number, note: number, dur: number, grit: boolean) {
+    const c = this.ctx, f = hz(note), lp = c.createBiquadFilter(), g = c.createGain();
+    lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = 1.5;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(.15, t + .015);
+    g.gain.setValueAtTime(.15, t + dur - .03);
+    g.gain.linearRampToValueAtTime(0, t + dur + .06);
+    lp.connect(g).connect(grit ? this.bus.grit : this.bus.bass);
+    for (const [type, det, gain] of [['sawtooth', -6, 1], ['sawtooth', 6, 1], ['sine', 0, 1.6]] as const) {
+      const o = c.createOscillator(), og = c.createGain();
+      o.type = type; o.frequency.value = f; o.detune.value = det;
+      og.gain.value = gain;
+      o.connect(og).connect(lp);
+      o.start(t); o.stop(t + dur + .1);
+    }
+  }
+
+  /** warm pads: detuned saws under a soft filter */
+  private pad(t: number, notes: number[], dur: number) {
+    const c = this.ctx, lp = c.createBiquadFilter(), g = c.createGain(), end = t + dur + 1.1;
+    lp.type = 'lowpass'; lp.frequency.value = 1500; lp.Q.value = .5;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(.045, t + .4);
+    g.gain.setValueAtTime(.045, t + dur - .1);
+    g.gain.linearRampToValueAtTime(0, t + dur + 1);
+    lp.connect(g).connect(this.bus.pad);
+    for (const m of notes) for (const det of [-8, 8]) {
+      const o = c.createOscillator();
+      o.type = 'sawtooth'; o.frequency.value = hz(m); o.detune.value = det;
       o.connect(lp);
       o.start(t); o.stop(end);
     }
-    const sub = c.createOscillator();
-    pitch(sub);
-    sub.connect(this.env(t, .38 * v, .004, dive ? dive * 1.5 : .22)).connect(this.bus.bass);
-    sub.start(t); sub.stop(end);
   }
 
-  /** a ghostly choir: detuned saws through two vowel formants that open from "oo" to "ah" and close over the chord */
-  private choir(t: number, notes: number[], dur: number, tremble: boolean) {
-    const c = this.ctx, end = t + dur + 1.3, voices = c.createGain(), g = c.createGain(), vowel = c.createOscillator();
-    voices.gain.value = 1 / notes.length;
-    vowel.frequency.value = 1 / (2 * dur);
-    for (const [lo, swing, q, amp] of [[330, 400, 5, 1], [870, 230, 7, .6]]) {
-      const bp = c.createBiquadFilter(), depth = c.createGain(), a = c.createGain();
-      bp.type = 'bandpass'; bp.frequency.value = lo; bp.Q.value = q;
-      depth.gain.value = swing;
-      vowel.connect(depth).connect(bp.frequency);
-      a.gain.value = amp;
-      voices.connect(bp).connect(a).connect(g);
-    }
-    const body = c.createBiquadFilter(), bodyGain = c.createGain();
-    body.type = 'lowpass'; body.frequency.value = 450; bodyGain.gain.value = .35;
-    voices.connect(body).connect(bodyGain).connect(g);
+  /** a glassy FM pluck */
+  private glass(t: number, note: number, v: number) {
+    const c = this.ctx, f = hz(note), car = c.createOscillator(), mod = c.createOscillator(), idx = c.createGain();
+    car.frequency.value = f;
+    mod.frequency.value = f * 3.5;
+    idx.gain.setValueAtTime(f * 1.5, t);
+    idx.gain.setTargetAtTime(0, t, .08);
+    mod.connect(idx).connect(car.frequency);
+    car.connect(this.env(t, .09 * v, .002, .9)).connect(this.bus.glass);
+    for (const o of [car, mod]) { o.start(t); o.stop(t + 1.1); }
+  }
+
+  /** a cloud of noise swelling through a band that climbs, then thinning out */
+  private cloud(t: number, dur: number) {
+    const c = this.ctx, n = this.noiseHit(t, 2.4), bp = c.createBiquadFilter(), g = c.createGain();
+    bp.type = 'bandpass'; bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(600, t);
+    bp.frequency.exponentialRampToValueAtTime(5000, t + dur * .5);
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(.1, t + 1.1);
-    g.gain.setValueAtTime(.1, t + dur - .2);
-    g.gain.linearRampToValueAtTime(0, t + dur + 1.2);
-    let out: AudioNode = g;
-    if (tremble) {
-      const trem = c.createGain(), tl = c.createOscillator(), td = c.createGain();
-      trem.gain.value = .65; tl.frequency.value = 7.5; td.gain.value = .35;
-      tl.connect(td).connect(trem.gain);
-      tl.start(t); tl.stop(end);
-      g.connect(trem);
-      out = trem;
-    }
-    out.connect(this.bus.choir);
-    for (const m of notes) for (const det of [-10, 10]) {
-      const o = c.createOscillator();
-      o.type = 'sawtooth'; o.frequency.value = hz(m); o.detune.value = det;
-      o.connect(voices);
-      o.start(t); o.stop(end);
-    }
-    vowel.start(t); vowel.stop(end);
+    g.gain.linearRampToValueAtTime(.18, t + dur * .4);
+    g.gain.linearRampToValueAtTime(0, t + dur * .8);
+    n.connect(bp).connect(g).connect(this.bus.fx);
   }
 
-  /** a pipe organ chord, each note one oscillator built from the ranks, held for `dur` */
-  private organ(t: number, notes: number[], dur: number, v: number) {
-    const c = this.ctx, g = c.createGain();
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(.05 * v, t + .04);
-    g.gain.setValueAtTime(.05 * v, t + dur - .03);
-    g.gain.linearRampToValueAtTime(0, t + dur + .12);
-    g.connect(this.bus.organ);
-    for (const m of notes) {
-      const o = c.createOscillator();
-      // the waveform's fundamental is the 16′ rank, an octave under the note
-      o.setPeriodicWave(this.pipes);
-      o.frequency.value = hz(m) / 2;
-      o.detune.value = (Math.random() - .5) * 6;
-      o.connect(g);
-      o.start(t); o.stop(t + dur + .2);
-    }
+  /** sines falling an octave or two, out of step with each other */
+  private fall(t: number) {
+    const c = this.ctx;
+    [[5200, 1.1], [3900, 1.3], [2900, .9], [2100, 1.2], [1500, 1]].forEach(([from, len], i) => {
+      const o = c.createOscillator(), g = c.createGain(), at = t + i * .07;
+      o.frequency.setValueAtTime(from, at);
+      o.frequency.exponentialRampToValueAtTime(from / (i % 2 ? 4 : 2.5), at + len);
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(.03, at + .05);
+      g.gain.linearRampToValueAtTime(0, at + len);
+      o.connect(g).connect(this.bus.fx);
+      o.start(at); o.stop(at + len + .05);
+    });
   }
 
-  private kick(t: number) {
+  /** the kick also pumps the bass and pads */
+  private kick(t: number, v = 1) {
     const c = this.ctx, o = c.createOscillator(), g = c.createGain();
     o.frequency.setValueAtTime(130, t);
     o.frequency.exponentialRampToValueAtTime(42, t + .13);
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(1, t + .003);
-    g.gain.exponentialRampToValueAtTime(.001, t + .45);
+    g.gain.linearRampToValueAtTime(v, t + .003);
+    g.gain.exponentialRampToValueAtTime(.001 * v, t + .45);
     o.connect(g).connect(this.bus.drums);
     o.start(t); o.stop(t + .5);
-    const n = this.noiseHit(t, .02), hp = c.createBiquadFilter(), ng = this.env(t, .3, .001, .015);
+    const n = this.noiseHit(t, .02), hp = c.createBiquadFilter(), ng = this.env(t, .3 * v, .001, .015);
     hp.type = 'highpass'; hp.frequency.value = 2000;
     n.connect(hp).connect(ng).connect(this.bus.drums);
+    const p = this.pump.gain;
+    p.setTargetAtTime(1 - .4 * v, t, .004);
+    p.setTargetAtTime(1, t + .03, .09);
   }
 
   /** the 80s snare: a crack of noise and a tone body, thrown into the gated room */
@@ -627,17 +492,6 @@ export class Beat {
     this.noiseHit(t, .3).connect(bp).connect(g).connect(pan).connect(this.bus.drums);
     const s = c.createGain();
     s.gain.value = .5;
-    g.connect(s).connect(this.gate);
-  }
-
-  private tom(t: number, note: number) {
-    const c = this.ctx, o = c.createOscillator(), g = this.env(t, .75, .002, .45);
-    o.frequency.setValueAtTime(hz(note) * 1.6, t);
-    o.frequency.exponentialRampToValueAtTime(hz(note), t + .1);
-    o.connect(g).connect(this.bus.drums);
-    o.start(t); o.stop(t + .6);
-    const s = c.createGain();
-    s.gain.value = .6;
     g.connect(s).connect(this.gate);
   }
 
@@ -687,7 +541,7 @@ export class Beat {
     g.connect(s).connect(this.verb);
   }
 
-  /** a cymbal played backwards, out of the silence at the end of C */
+  /** a cymbal played backwards */
   private swell(t: number, dur: number) {
     const c = this.ctx, n = this.noiseHit(t, dur), hp = c.createBiquadFilter(), g = c.createGain();
     hp.type = 'highpass';
@@ -696,18 +550,11 @@ export class Beat {
     g.gain.setValueAtTime(.001, t);
     g.gain.exponentialRampToValueAtTime(.3, t + dur - .01);
     g.gain.linearRampToValueAtTime(0, t + dur);
-    n.connect(hp).connect(g).connect(this.bus.drums);
-    const s = c.createGain();
-    s.gain.value = .4;
-    g.connect(s).connect(this.verb);
+    n.connect(hp).connect(g).connect(this.bus.fx);
   }
 
   stop() {
-    for (const o of [...(this.drone ?? []), ...(this.theremin?.osc ?? []), this.wind?.src]) {
-      try { o?.stop(); } catch { /* already stopped */ }
-    }
-    this.drone = null;
-    this.theremin = null;
-    this.wind = null;
+    for (const o of this.lead?.osc ?? []) { try { o.stop(); } catch { /* already stopped */ } }
+    this.lead = null;
   }
 }

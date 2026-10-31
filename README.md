@@ -80,18 +80,18 @@ converting it to MJPEG with ffmpeg), so a session can be replayed through the re
 
 ## The beat
 
-Spooky and bouncing, synthesised live with Web Audio (`src/audio/beat.ts`, no audio files): 4/4 at 160 bpm in D
-minor, a 32-bar cycle (48 s) that never ends. **A**, the hook: an original tune over a lament bass (Dm, C, B♭, A with a
-flat nine). **A′**, the hook again with glockenspiel, swooping up to a high A. **B**, the breather: half-time drums
-and a slow ghostly counter-line over Gm, Dm, E♭ and A, then a snare roll and a riser. **C**, the chaos: a pipe organ
-and a running square-wave toccata over a chromatic line (D, C♯, C, B, B♭, A), four on the floor, then a stutter, a
-dive and dead air before the hook slams back in. The sections sit within about a decibel of each other and the hats
-are kept soft, so it wears well over a long run.
+Dark synthwave, synthesised live with Web Audio (`src/audio/beat.ts`, no audio files): 4/4 at 160 bpm in D minor, a
+34-bar cycle (51 s) that never ends. **Riff**: a bright staccato arpeggio of stabs over four-on-the-floor kicks.
+**Tear**: the riff melts flat, a noise cloud swells over a gritty low A, glissandi fall, then a beat of silence.
+**Soar**: a near-pure sine lead high up, holding long notes and sliding between them over warm pads and a legato saw
+bass that pumps against the kick, the drums kept light. **Storm**: the lead's first phrase again with the riff under
+it and the drums back in full, ending on a long slide down an octave into the riff. The lead sits on top, the pads and
+bass about 5 dB under it and the drums well back, so it wears well over a long run.
 
-It builds with the difficulty: a ghostly choir, drone, wind and a music box playing the tune on the title; a
-bouncing bass when a run starts; drums from D 0.25; from D 0.55 a theremin (one gliding voice with a blooming
-vibrato) takes the tune, with glockenspiel and sixteenth hats; and down to two hearts, everything shifts up a
-semitone, the bass and a square lead under the tune are driven, claps and a shaker come in and the choir trembles.
+It builds with the difficulty: pads, the lead and soft stabs on the title; the bass when a run starts; drums and the
+pump from D 0.25; sixteenth hats, stabs doubled an octave up, glass arpeggios and a backbeat under the lead from
+D 0.55; and down to two hearts, everything shifts up a semitone, the bass and stabs are driven, and claps and a shaker
+come in.
 Pausing muffles it. M or the note button mutes it, and that's remembered. Browsers only allow sound after a click or
 key, so it starts on the first one.
 
