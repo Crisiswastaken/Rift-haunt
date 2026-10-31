@@ -16,6 +16,7 @@ import { recorder } from '../debug/recorder';
 import { Hands } from './hands';
 import { Board } from '../ui/board';
 import { EV } from '../../api/_lib/rules';
+import { count, lasted } from '../analytics';
 
 /** camera: starting the camera and hand tracking; practice: one ghost to banish before a hands run */
 type Mode = 'title' | 'camera' | 'practice' | 'ready' | 'play' | 'paused' | 'over';
@@ -211,7 +212,7 @@ export class Game {
       this.hud.cameraStatus('Starting the camera…');
       const err = await this.hands.start(s => this.hud.cameraStatus(s));
       if (this.mode !== 'camera') return;
-      if (err) { this.hud.cameraError(err); return; }
+      if (err) { this.hud.cameraError(err); count('Camera failed', { reason: err.slice(0, 120) }); return; }
     }
     this.start();
   }
@@ -230,6 +231,7 @@ export class Game {
     this.score = 0; this.chain = 0; this.banished = 0;
     this.log = [];
     this.ticket = this.board.ticket(this.input);
+    count('Play', { input: this.input });
     this.w.speed = 1;
     this.hud.setHearts(this.hearts);
     this.hud.setScore(0);
@@ -299,6 +301,7 @@ export class Game {
     this.hud.over({ score: this.score, banished: this.banished, seconds: this.runT, best: this.best, isBest });
     this.hud.show('over', 'over');
     void this.board.offer({ ticket: this.ticket, mode: this.input, score: this.score, seconds: this.runT, log: this.log });
+    count('Game over', { input: this.input, lasted: lasted(this.runT) });
   }
 
   /** the leaderboard, over the title or the game-over screen; it opens on the way you play */

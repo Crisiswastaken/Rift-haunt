@@ -3,6 +3,7 @@
    only ever go onto the page as text. */
 import { NAME, shapeName } from '../../api/_lib/name-shape';
 import type { Mode } from '../../api/_lib/rules';
+import { count } from '../analytics';
 
 export interface Entry { rank: number; name: string; score: number }
 /** a finished run, ready to save: what the server needs to check it */
@@ -111,6 +112,7 @@ export class Board {
       $('saved-text').textContent = r.improved ? `Saved! You're ${where}.` : `Your best of ${fmt(r.best)} stays: ${where}.`;
       $('saved').hidden = false;
       this.fresh = { mode: run.mode, top: r.top, at: Date.now() };
+      count('Leaderboard save', { board: run.mode });
     } catch (e) {
       this.go.disabled = false;
       this.say(e instanceof Error ? e.message : String(e), 'error');

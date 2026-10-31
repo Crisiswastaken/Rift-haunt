@@ -70,6 +70,14 @@ Turned-away runs are logged with the reason. Like any game that runs in the brow
 script that plays perfectly is still playing), but editing the score, the page or the request gets nowhere, and
 nothing can be claimed past flawless play. Saving is off with `?debug`, which exposes the game in the console.
 
+## Analytics
+
+Vercel Web Analytics (`src/analytics.ts`, cookieless), on the live site only: the dev server and `?debug` send
+nothing, and page addresses go without their query. Besides page views it counts a few moments as custom events
+(these show on Vercel's Pro plan): **Play** (mouse or hands), **Game over** (mouse or hands, and how long it lasted, in
+bands), **Leaderboard save** (which board) and **Camera failed** (why hands mode couldn't start). Turn Web Analytics on
+in the project's Analytics tab.
+
 ## Deploying
 
 The game is a static site plus one function, made for Vercel:
