@@ -7,7 +7,8 @@
      the direction of motion it stays heavy, since sideways wobble is never what the player meant.
    - A still hand holds its spot inside a small deadzone; once moving it follows with no trailing offset.
    - A small forward lead at drawing speed, none when aiming or turning, so the cursor doesn't trail a quick stroke.
-   Positions are fractions of the screen (0..1 across and down), times in seconds. */
+   Positions are fractions of the screen (0..1 across and down), times in seconds; inside, x is scaled by `kx` so
+   speeds and distances are the same unit across and down (screen heights). */
 
 const TAU = Math.PI * 2;
 const alpha = (cutoff: number, dt: number) => 1 / (1 + 1 / (TAU * cutoff * dt));
@@ -55,7 +56,7 @@ export type Pt2 = { x: number; y: number };
 export type Push = 'ok' | 'skip' | 'jump';
 
 export class Smoother {
-  /** the steady point (what a stroke is drawn from) and the cursor (with the lead), or null before the first frame */
+  /** the stroke's ink (the light track) and the cursor (the aim filter, with the lead), or null before the first frame */
   point: Pt2 | null = null;
   cursor: Pt2 | null = null;
   /** screens a second, from the light track; and still / moving */
@@ -66,6 +67,8 @@ export class Smoother {
       the third) */
   lastT = -1;
   n = 0;
+  /** screen heights per screen width for the hand: x is multiplied by this inside (set by the pen from its box) */
+  kx = 1;
 
   private tx: OneEuro;
   private ty: OneEuro;
@@ -86,7 +89,8 @@ export class Smoother {
 
   /** one frame's point; `sure`: the tracker is confident in it (only confident frames can agree on a relocation) */
   push(sx: number, sy: number, t: number, sure = true): Push {
-    const o = this.o;
+    const o = this.o, kx = this.kx;
+    sx *= kx;
     let result: Push = 'ok';
     if (this.last && this.lastT >= 0) {
       const gap = t - this.lastT;
@@ -107,11 +111,11 @@ export class Smoother {
     this.glitch = null; this.glitchN = 0;
 
     // speed from the light track (slope over the window)
-    const kx = this.tx.filter(sx, t), ky = this.ty.filter(sy, t);
-    this.track.push({ t, x: kx, y: ky });
+    const kx_ = this.tx.filter(sx, t), ky = this.ty.filter(sy, t);
+    this.track.push({ t, x: kx_, y: ky });
     while (this.track.length > 2 && t - this.track[1].t >= o.velWindow) this.track.shift();
     const old = this.track[0], dt = t - old.t;
-    this.vel = dt >= .02 ? { x: (kx - old.x) / dt, y: (ky - old.y) / dt } : { x: 0, y: 0 };
+    this.vel = dt >= .02 ? { x: (kx_ - old.x) / dt, y: (ky - old.y) / dt } : { x: 0, y: 0 };
     const speed = this.speed = Math.hypot(this.vel.x, this.vel.y);
 
     // still or moving: a real move shows as distance over a short window (jitter averages out), or clear speed
@@ -134,10 +138,12 @@ export class Smoother {
         this.aim = { x: this.aim.x + a * along * ux + ap * qx, y: this.aim.y + a * along * uy + ap * qy };
       } else this.aim = { x: this.aim.x + a * ex, y: this.aim.y + a * ey };
     }
-    const p = this.point = this.hold(this.aim);
-    this.hist.push({ t, x: p.x, y: p.y });
+    const p = this.hold(this.aim);
+    // the ink is the light track: the heavy aim filter flattens corners and curves
+    const ink = this.point = { x: clamp01(kx_ / kx), y: clamp01(ky) };
+    this.hist.push({ t, x: ink.x, y: ink.y });
     while (this.hist.length && t - this.hist[0].t > .5) this.hist.shift();
-    this.last = { x: kx, y: ky };
+    this.last = { x: kx_, y: ky };
     const prevT = this.lastT;
     this.lastT = t;
     this.n++;
@@ -151,7 +157,7 @@ export class Smoother {
     let ox = this.leadV.x * lead, oy = this.leadV.y * lead;
     const n = Math.hypot(ox, oy);
     if (n > o.leadMax) { ox *= o.leadMax / n; oy *= o.leadMax / n; }
-    this.cursor = { x: clamp01(p.x + ox), y: clamp01(p.y + oy) };
+    this.cursor = { x: clamp01((p.x + ox) / kx), y: clamp01(p.y + oy) };
     return result;
   }
 
@@ -159,7 +165,7 @@ export class Smoother {
   coast(t: number): Pt2 | null {
     if (!this.point || this.lastT < 0) return null;
     const gap = t - this.lastT, k = .5 ** (gap / .033);
-    return { x: clamp01(this.point.x + this.vel.x * gap * k), y: clamp01(this.point.y + this.vel.y * gap * k) };
+    return { x: clamp01(this.point.x + this.vel.x / this.kx * gap * k), y: clamp01(this.point.y + this.vel.y * gap * k) };
   }
 
   /** the steady points since time t (the start of a stroke, before the pen was put down) */
@@ -174,6 +180,7 @@ export class Smoother {
     this.vel = { x: 0, y: 0 }; this.leadV = { x: 0, y: 0 };
     this.lastT = -1;
     this.n = 0;
+    this.speed = 0;
   }
 
   reset() {

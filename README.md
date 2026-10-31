@@ -37,17 +37,20 @@ Esc or P pauses (so does leaving the tab). Enter plays again from the title and 
 
 ## Hands mode
 
-- **Drawing:** move your hand slowly and the firefly just follows it (aiming). Swipe quickly and that swipe is a stroke,
-  from where the quick move began to where you slowed down, and it's cast. No hand shape to hold. Putting your arm
-  down to your side is never cast.
+- **Drawing:** point your index finger to draw; close your fist (or open your hand) to move without drawing. Your
+  fingertip is the pen. The firefly is dim and small while the pen is up (just aiming) and bright and glowing while
+  it's down, leaving ink. Holding still while pointing for about half a second also ends a stroke, for players who
+  never make a fist. Putting your arm down to your side is never cast.
+- **Wrong shapes:** a shape that no ghost is showing is ignored in hands mode: nothing is cast and the combo stays.
+- **Light:** when the camera drops below 25 fps (a dim room slows webcams down), a small line says so; add light.
 - **Reach:** your hand moves in a box anchored to your shoulders (2.2 x 1.42 shoulder widths) and that box is the whole
   screen, so an arm's sweep reaches every corner whether you stand at arm's length or two metres back.
 - **You on screen:** the camera picture, cut out by the body model's person mask, mirrored and moonlit, stands at the
   bottom centre: sized from your shoulders so your face is about 13% of the screen tall, never floating (standing close,
   it's enlarged and lowered until it reaches the bottom). It's taken from a full-resolution crop of the part that's on
   screen, so it stays sharp when you stand back. The ghosts fly at your chin.
-- **First time:** one practice ghost hovers with a line across on it, and the coaching line reads what the camera sees.
-  Skippable.
+- **First time:** one practice ghost hovers with a line across on it, and the coaching line reads what the camera sees:
+  "Point your finger to draw · Make a fist to move" until you point, then "Now swipe". Skippable.
 - **Menus:** hold the firefly on a button for about a second; a gold ring fills and it presses. Clicks still work.
 - **Walk off** for 2.5 s mid-run and it pauses ("Where did you go?"); come back and it carries on.
 - **D** shows what the tracking is doing: camera fps, each model's rate and lag, which hand, the speed, whether it's drawing.
@@ -60,10 +63,11 @@ player in this game:
 - Two MediaPipe models run side by side in workers, both on the CPU (on a real player the hand model found the hand in
   84% of frames on the CPU and 33% on the GPU, and the GPU is left to the game, which draws at a device pixel ratio of 1
   while the camera is on). The body model (pose landmarker lite) reads the whole 640-wide frame: you, your shoulders,
-  which hand is up, your arms, and the person mask. The hand model reads a 256 x 256 crop around the drawing arm's palm
-  cut from the full 1280 x 720 frame, so a hand two metres away is still big enough to find.
-- The pen point is the palm from the hand model; when it misses a frame (a hand pointed at the camera, or blurred), the
-  arm's palm from the body model, moved by where the two were last seen apart and blended back over a few frames.
+  which hand is up, your arms, and the person mask. The hand model reads the whole frame at 640 wide, so a lost hand is found again in a frame or two;
+  only a player more than about two metres away gets a crop around the drawing arm cut from the full 1280 x 720 frame.
+- The pen point is the index fingertip while you point (the palm, kept where the fingertip was, otherwise). When the hand model misses a frame (a hand pointed
+  at the camera, blurred, or lost in a dim room: up to 40% of frames) the cursor holds and a stroke coasts for a moment, then waits up to .5 s for the hand;
+  the body model's arm is never the pen (it sat 100-300 px off the fingertip and drew strokes nobody made).
 - RIFT's blade filter smooths it: a glitch gate (its tolerance grows with the gap between frames), a light One Euro
   track for the speed, a heavy aim filter that opens with speed above a jitter floor and stays heavy across the
   direction of motion, a still-hand deadzone and a small lead at speed.
@@ -100,7 +104,7 @@ JS for the game, 1.2 MB of art, and ~27 MB of tracking models and wasm (the body
 | `src/game/director.ts` | What spawns, when and where: random gaps, bursts and lulls around a time-based difficulty, the storm and big ghosts by chance with cooldowns, heart ghosts. |
 | `src/game/game.ts` | The flow (title, mouse or hands, camera, practice, Ready / Set / Draw, play, pause, game over), casting, hearts, combo, score, the frame loop. |
 | `src/game/hands.ts` | Hands mode as one piece: camera, tracking, you, the hand pen. |
-| `src/input/hand/` | `camera.ts` (the webcam), `vision.ts` + `vision.worker.ts` + `vision-core.ts` (the body and hand models in two workers), `body.ts` (shoulders, which hand, the box mapped to the screen), `handpen.ts` (swipe to draw), `filters.ts` (RIFT's blade filter), `gesture.ts` (finger poses, for the debug panel). |
+| `src/input/hand/` | `camera.ts` (the webcam), `vision.ts` + `vision.worker.ts` + `vision-core.ts` (the body and hand models in two workers), `body.ts` (shoulders, which hand, the box mapped to the screen), `handpen.ts` (point to draw, fist to move), `filters.ts` (RIFT's blade filter), `gesture.ts` (finger poses, for the debug panel). |
 | `src/debug/recorder.ts` | Records hands-mode sessions on the dev server (camera video and logs into `logs/`). |
 | `src/render/player.ts` | You: the cut-out's textures, framing from your face, presence, where the ghosts aim. |
 | `src/render/gl.ts` | A small WebGL renderer: textured quads with three blends, and a second program that draws you through the mask, mirrored and moonlit. The scene, ghosts, you and the top layer all go into one canvas. |

@@ -107,6 +107,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   opacity: 0; transition: opacity .5s;
 }
 .hint.on { opacity: 1; }
+/* the camera is slow (a dim room): a small line at the bottom */
+.light-hint { position: absolute; left: 0; right: 0; bottom: 12px; margin: 0; text-align: center; pointer-events: none;
+  font: 600 15px/1.3 var(--font); color: var(--gold); text-shadow: 0 2px 8px rgba(10, 6, 40, .9); }
 
 /* ---------- screens ---------- */
 
@@ -176,10 +179,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .hand-cursor img { position: absolute; inset: 0; width: 100%; height: 100%; }
 .hand-cursor img:first-child { opacity: .55; }
 .hand-cursor img:last-child { inset: 22px; width: 46px; height: 46px; filter: brightness(1.8); }
-.hand-cursor.on { opacity: .8; }
-.hand-cursor.on.point { opacity: 1; scale: 1; }
-.hand-cursor.on.point img:first-child { opacity: .8; }
-.hand-cursor.on.draw { scale: 1.2; }
+.hand-cursor.on { opacity: .45; scale: .6; }
+.hand-cursor.on img:first-child { opacity: .3; }
+.hand-cursor.on img:last-child { filter: brightness(1); }
+/* pen down: bright, glowing, leaving ink */
+.hand-cursor.on.draw { opacity: 1; scale: 1.2; }
+.hand-cursor.on.draw img:first-child { opacity: 1; }
+.hand-cursor.on.draw img:last-child { filter: brightness(2.2); }
 
 /* holding a fingertip on a button: a ring fills around it */
 button.dwell { outline: none; box-shadow: 0 0 0 4px rgba(255, 201, 74, .25), 0 0 0 4px var(--gold) inset; }

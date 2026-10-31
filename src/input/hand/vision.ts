@@ -1,5 +1,5 @@
 /* Sends camera frames to MediaPipe and hands back what it found, on two channels that run side by side: the body
-   (the whole frame, small) and the hand (a close crop around it, cut from the full-size frame). Each runs in its own
+   (the whole frame, small) and the hand (the whole frame at 640 wide, or a crop for a far player). Each runs in its own
    worker when it can, and on the page when it can't. Each has one frame in flight at a time: a slow frame is skipped
    rather than queued, so what comes back is never more than a frame behind. */
 import type { Delegate, HandData, MaskData } from './vision-core';
@@ -122,14 +122,13 @@ export class Vision {
     if (c.busy || !this.ready || !video.videoWidth) return;
     c.busy = true;
     const vw = video.videoWidth, vh = video.videoHeight, k = Math.min(1, POSE_W / vw);
-    let bitmap: ImageBitmap, sharp: ImageBitmap | null = null;
-    try {
-      [bitmap, sharp] = await Promise.all([
-        createImageBitmap(video, { resizeWidth: Math.round(vw * k), resizeHeight: Math.round(vh * k), resizeQuality: 'medium' }),
-        view ? createImageBitmap(video, Math.round(view.rect.x), Math.round(view.rect.y), Math.round(view.rect.w), Math.round(view.rect.h),
-          { resizeWidth: view.w, resizeHeight: view.h, resizeQuality: 'medium' }) : null,
-      ]);
-    } catch { c.busy = false; return; }
+    // each caught on its own, so one failing never leaks the other
+    const [bitmap, sharp] = await Promise.all([
+      createImageBitmap(video, { resizeWidth: Math.round(vw * k), resizeHeight: Math.round(vh * k), resizeQuality: 'medium' }).catch(() => null),
+      view ? createImageBitmap(video, Math.round(view.rect.x), Math.round(view.rect.y), Math.round(view.rect.w), Math.round(view.rect.h),
+        { resizeWidth: view.w, resizeHeight: view.h, resizeQuality: 'medium' }).catch(() => null) : null,
+    ]);
+    if (!bitmap) { sharp?.close(); c.busy = false; return; }
     const v = view?.rect;
     if (sharp && v) this.views.set(t * 1000, { bitmap: sharp, part: [v.x / vw, v.y / vh, v.w / vw, v.h / vh] });
     if (c.worker) c.worker.postMessage({ type: 'frame', bitmap, t: t * 1000 }, [bitmap]);
