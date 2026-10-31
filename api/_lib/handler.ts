@@ -26,6 +26,8 @@ export interface Deps {
   secret: string;
   /** lets DELETE take names off; empty turns it off */
   admin?: string;
+  /** other sites whose pages may save (the game served from their path through a rewrite), e.g. https://tryrift.fun */
+  origins?: string[];
   now?: () => number;
 }
 
@@ -33,8 +35,9 @@ export interface Entry { rank: number; name: string; score: number }
 
 const TOP = 10;
 const TICKET_HOURS = 4;
-/** saves per address: a minute, an hour */
-const RATE = { minute: 6, hour: 40 };
+/** saves per address: a minute, an hour. Generous, since a mobile network can put a great many players behind one
+    address; the tickets, the referee and the ceiling are what keep the board honest */
+export const RATE = { minute: 30, hour: 400 };
 const BODY_MAX = 400_000;
 
 const K = {
@@ -114,11 +117,11 @@ export async function handle(request: Request, deps: Deps): Promise<Response> {
     if (request.method === 'DELETE') return remove(url, request, deps);
     if (request.method !== 'POST') return fail(405, 'Method not allowed.');
 
-    // only from the game's own pages
-    const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
-    let sameSite = false;
-    try { sameSite = new URL(request.headers.get('origin') ?? '').host === host; } catch { /* no origin */ }
-    if (!sameSite) return fail(403, 'Scores can only be saved from the game.');
+    // only from the game's own pages (or a site it's served through)
+    const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host'), origin = request.headers.get('origin') ?? '';
+    let ours = !!deps.origins?.includes(origin);
+    try { ours ||= new URL(origin).host === host; } catch { /* no origin */ }
+    if (!ours) return fail(403, 'Scores can only be saved from the game.');
 
     const raw = await request.text();
     if (raw.length > BODY_MAX) return fail(413, 'That run is too long to save.');
@@ -163,8 +166,8 @@ async function save(data: Record<string, unknown>, request: Request, deps: Deps,
     return fail(422, "That run didn't add up, so it wasn't saved.");
   }
 
-  // rate limit by address, kept as a keyed hash
-  const ip = (request.headers.get('x-real-ip') ?? request.headers.get('x-forwarded-for')?.split(',')[0] ?? 'local').trim();
+  // rate limit by address (the client's: the first a proxy passes on), kept as a keyed hash
+  const ip = (request.headers.get('x-forwarded-for')?.split(',')[0] || request.headers.get('x-real-ip') || 'local').trim();
   const who = (await sign(secret, `ip:${ip}`)).slice(0, 16), minute = Math.floor(now / 60e3), hour = Math.floor(now / 3600e3);
   const [perMinute, , perHour] = await store.run([
     ['INCR', K.rate(who, `m${minute}`)], ['EXPIRE', K.rate(who, `m${minute}`), 70],

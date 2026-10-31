@@ -60,8 +60,9 @@ browser says is taken on trust, since anything in the page can be changed from t
 - **Names** are tidied and checked on the server for slurs and profanity, including spaced-out, stretched, accented
   and leetspeak spellings (`api/_lib/names.ts`; the word list is ROT13'd and never sent to the browser). Names only
   ever go onto the page as text.
-- **Limits.** Saves only from the game's own pages, 6 a minute and 40 an hour per address (kept as a keyed hash,
-  never the address itself). Reading the board is cached at the edge for 10 s.
+- **Limits.** Saves only from the game's own pages (and those of `LEADERBOARD_ORIGINS`, tryrift.fun by default), 30
+  a minute and 400 an hour per address, kept as a keyed hash, never the address itself (generous, since a mobile
+  network can put a great many players behind one address). Reading the board is cached at the edge for 10 s.
 - **Clean-up.** With `LEADERBOARD_ADMIN_KEY` set, an entry can be taken off:
   `curl -X DELETE -H "Authorization: Bearer $KEY" "https://<site>/api/leaderboard?mode=hands&name=<name>"`.
 
@@ -79,7 +80,8 @@ The game is a static site plus one function, made for Vercel:
    `KV_REST_API_TOKEN`, which is all the leaderboard needs; without them the game plays and the leaderboard says it
    isn't set up.
 3. Optional: `LEADERBOARD_SECRET` to sign tickets with (otherwise one is derived from the Redis token),
-   `LEADERBOARD_ADMIN_KEY` (16+ characters) for taking entries off.
+   `LEADERBOARD_ADMIN_KEY` (16+ characters) for taking entries off, `LEADERBOARD_ORIGINS` (comma-separated) if the
+   game is served through a site other than tryrift.fun.
 4. Set `VITE_SITE_URL` in `.env` to the game's address (it's `https://tryrift.fun/halloween/` now) for link previews.
 
 To serve it under a path of another site, rewrite that path to this project (e.g. `/halloween/:path*` to

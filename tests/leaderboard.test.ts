@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { handle } from '../api/_lib/handler';
+import { handle, RATE } from '../api/_lib/handler';
 import { decentName, nameKey, rot13 } from '../api/_lib/names';
 import { shapeName } from '../api/_lib/name-shape';
 import { cap, EV, tally } from '../api/_lib/rules';
@@ -113,7 +113,7 @@ describe('the API', () => {
   const origin = 'http://haunt.test';
   const setup = () => {
     let now = Date.UTC(2026, 9, 31, 20);
-    const deps = { store: memory(), secret: 'test secret', admin: 'an admin key of some length', now: () => now };
+    const deps = { store: memory(), secret: 'test secret', admin: 'an admin key of some length', origins: ['https://tryrift.fun'], now: () => now };
     const post = (body: object, headers: Record<string, string> = { origin }) =>
       handle(new Request(`${origin}/api/leaderboard`, { method: 'POST', headers: { host: 'haunt.test', ...headers }, body: JSON.stringify(body) }), deps);
     const get = (mode: string) => handle(new Request(`${origin}/api/leaderboard?mode=${mode}`), deps).then(r => r.json());
@@ -160,13 +160,15 @@ describe('the API', () => {
   it('only takes saves from the game\'s own pages, and not too many', async () => {
     const { post, ticket, later } = setup();
     const { log, seconds } = run(10);
-    const tickets = await Promise.all(Array.from({ length: 8 }, () => ticket()));
+    const tickets = await Promise.all(Array.from({ length: RATE.minute + 2 }, () => ticket()));
     later(60 - (Date.UTC(2026, 9, 31, 20) / 1000) % 60 + 30);
     expect((await post({ op: 'save', ticket: tickets[0], name: 'Elsewhere', score: 180, seconds, log }, { origin: 'https://evil.test' })).status).toBe(403);
     expect((await post({ op: 'start', mode: 'mouse' }, {})).status).toBe(403);
+    // a site the game is served through (a rewrite from its path) may save too
+    expect((await post({ op: 'save', ticket: tickets[0], name: 'Through RIFT', score: 180, seconds, log }, { origin: 'https://tryrift.fun' })).status).toBe(200);
     const codes = [];
-    for (const t of tickets.slice(0, 7)) codes.push((await post({ op: 'save', ticket: t, name: 'Spammer', score: 180, seconds, log })).status);
-    expect(codes).toEqual([200, 200, 200, 200, 200, 200, 429]);
+    for (const t of tickets.slice(1)) codes.push((await post({ op: 'save', ticket: t, name: 'Spammer', score: 180, seconds, log }, { origin, 'x-forwarded-for': '203.0.113.9, 10.0.0.1' })).status);
+    expect(codes).toEqual([...Array(RATE.minute).fill(200), 429]);
   });
 
   it('keeps each name\'s best, and the admin can take one off', async () => {
