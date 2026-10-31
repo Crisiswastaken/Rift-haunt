@@ -34,7 +34,9 @@ async function call<T>(method: 'GET' | 'POST', query = '', body?: object): Promi
       headers: body ? { 'Content-Type': 'application/json' } : undefined,
     });
   } catch { throw new Error(UNREACHABLE); }
-  const out = await res.json().catch(() => ({})) as T & { error?: string };
+  // anything but JSON (a host that answers every path with the page, say) means there's no leaderboard here
+  const out = await res.json().catch(() => null) as (T & { error?: string }) | null;
+  if (!out || typeof out !== 'object') throw new Error(UNREACHABLE);
   if (!res.ok) throw new Error(out.error ?? UNREACHABLE);
   return out;
 }
@@ -72,7 +74,7 @@ export class Board {
   /** a run is starting: ask for its ticket now, so it's there by the end */
   ticket(mode: Mode): Promise<string | null> {
     if (!this.enabled) return Promise.resolve(null);
-    return call<{ ticket: string }>('POST', '', { op: 'start', mode }).then(r => r.ticket, () => null);
+    return call<{ ticket?: unknown }>('POST', '', { op: 'start', mode }).then(r => typeof r.ticket === 'string' ? r.ticket : null, () => null);
   }
 
   /** the game-over screen: offer to save the run, if it scored and there's a ticket for it */
@@ -135,6 +137,7 @@ export class Board {
     this.render([]);
     try {
       const { top } = await call<{ top: Entry[] }>('GET', `?mode=${mode}`);
+      if (!Array.isArray(top)) throw new Error(UNREACHABLE);
       if (this.mode !== mode) return;
       this.render(top);
       this.note(top.length ? '' : 'No scores yet. Yours could be the first.');
