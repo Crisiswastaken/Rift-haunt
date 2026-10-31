@@ -21,8 +21,30 @@ async function boot() {
   game.run();
 }
 
+/** something went wrong that the game can't carry on from: say so, and offer to start again */
+function broken(text: string) {
+  const loading = document.getElementById('loading')!, stage = document.getElementById('stage')!;
+  for (const s of stage.querySelectorAll<HTMLElement>('.screen')) s.hidden = s !== loading;
+  stage.dataset.state = 'loading';
+  loading.querySelector('p')!.textContent = text;
+  loading.querySelector('.bar')?.remove();
+  if (!loading.querySelector('button')) {
+    const again = Object.assign(document.createElement('button'), { type: 'button', className: 'btn', textContent: 'Try again' });
+    again.addEventListener('click', () => location.reload());
+    loading.append(again);
+  }
+}
+
+// the GPU can be reset under us (a driver update, a laptop waking up): the art is gone with it
+document.getElementById('view')!.addEventListener('webglcontextlost', e => {
+  e.preventDefault();
+  broken('The graphics stopped working for a moment.');
+});
+
 boot().catch(e => {
-  const p = document.querySelector('#loading p');
-  if (p) p.textContent = `Couldn't load the game: ${e instanceof Error ? e.message : e}`;
   console.error(e);
+  const webgl = e instanceof Error && /WebGL/.test(e.message);
+  broken(webgl
+    ? 'Haunt needs WebGL, and this browser has it turned off. Try another browser, or turn on hardware acceleration.'
+    : "The game couldn't load. Check your connection and try again.");
 });

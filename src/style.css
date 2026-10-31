@@ -107,13 +107,20 @@ button { font: inherit; color: inherit; cursor: pointer; }
   opacity: 0; transition: opacity .5s;
 }
 .hint.on { opacity: 1; }
+#stage:not([data-state="play"]) .hint { opacity: 0; }
 /* the camera is slow (a dim room): a small line at the bottom */
 .light-hint { position: absolute; left: 0; right: 0; bottom: 12px; margin: 0; text-align: center; pointer-events: none;
   font: 600 15px/1.3 var(--font); color: var(--gold); text-shadow: 0 2px 8px rgba(10, 6, 40, .9); }
 
 /* ---------- screens ---------- */
 
-.screen { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; }
+/* a panel taller than the screen (a phone on its side) scrolls rather than losing its top and bottom */
+.screen {
+  position: absolute; inset: 0; display: grid; place-items: start center; overflow-y: auto; overscroll-behavior: contain;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  touch-action: pan-y;
+}
+.screen > .panel { margin-block: auto; }
 .screen.dim { background: rgba(9, 7, 28, .45); animation: fade .3s; }
 @keyframes fade { from { opacity: 0; } }
 
@@ -150,7 +157,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--felt-edge), 0 8px 18px rgba(8, 5, 30, .45); }
 .link { background: none; border: 0; padding: 6px 10px; color: var(--lav); font-size: 17px; }
 .link:hover { color: var(--felt); text-decoration: underline; text-underline-offset: 4px; }
+.link.inline { padding: 4px 6px; color: var(--gold); font-weight: 600; }
 .best { margin: 0; color: var(--lav); }
+.title-foot { margin: 0; color: var(--lav); }
+.links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 6px; }
+.btn:disabled { opacity: .55; cursor: default; transform: none; }
 
 /* mouse or hands */
 .choose { display: grid; gap: 12px; margin-top: 6px; }
@@ -169,7 +180,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #camera-fail { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 
 /* practice */
-.skip { position: absolute; right: 18px; bottom: max(3.5vh, 18px); }
+/* (.link.skip: `.btn, .link` below make buttons position: relative, which would put this off the top of the screen) */
+.link.skip { position: absolute; right: 18px; bottom: max(3.5vh, 18px); color: var(--felt); text-shadow: 0 2px 8px rgba(10, 6, 40, .9); }
 
 /* the firefly at your fingertip */
 .hand-cursor {
@@ -197,8 +209,15 @@ button.dwell::after {
 }
 .btn, .link, .icon-btn { position: relative; }
 .sound { margin: -4px 0 0; color: var(--lav); font-size: 14px; opacity: .8; }
+/* an upright phone: the graveyard is small that way round */
+.tip { display: none; margin: -2px 0 0; color: var(--gold); font-size: 15px; }
+@media (orientation: portrait) and (hover: none) and (pointer: coarse) and (max-width: 600px) { .tip { display: block; } }
+@media (hover: none) and (pointer: coarse) { .keys { display: none; } }
 .best b { color: var(--gold); }
 
+/* game over: the score, then what next (side by side on a short, wide screen) */
+.over-score, .over-next { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.over-next { width: 100%; }
 .kicker { margin: 0; font-size: 22px; color: var(--lav); }
 .final { position: relative; margin: 0; }
 .stamp {
@@ -211,19 +230,86 @@ button.dwell::after {
 .stats dd { margin: 0; font: 700 30px/1.1 var(--font); color: var(--felt); font-variant-numeric: tabular-nums; }
 .stats dt { color: var(--lav); font-size: 15px; }
 
-.loading { align-content: center; gap: 14px; color: var(--lav); }
-.loading p { margin: 0; font-size: 20px; }
+.loading { place-items: center; align-content: center; gap: 14px; color: var(--lav); }
+.loading p { margin: 0; font-size: 20px; max-width: 26em; text-align: center; }
 .bar { width: 220px; height: 8px; border-radius: 99px; background: rgba(236, 231, 255, .14); overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; background: var(--felt); border-radius: inherit; transition: width .2s; }
+
+/* ---------- the leaderboard ---------- */
+
+.save { width: 100%; max-width: 400px; display: grid; gap: 8px; margin: 2px 0 0; }
+.save-label { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 8px; color: var(--lav); font-size: 16px; }
+.tag { padding: 1px 10px; border-radius: 99px; background: rgba(244, 240, 255, .14); color: var(--felt); font: 600 13px/1.6 var(--font); }
+.save-row { display: flex; gap: 8px; }
+.save input {
+  /* a percentage width, so its built-in 20-character width doesn't hold the panel open on a phone */
+  flex: 1; width: 100%; min-width: 0; padding: 10px 18px; border-radius: 999px;
+  border: 2px solid rgba(236, 231, 255, .22); background: rgba(9, 7, 28, .5); color: var(--felt);
+  font: 600 19px/1.2 var(--font); user-select: text; -webkit-user-select: text; touch-action: manipulation;
+}
+.save input::placeholder { color: rgba(184, 174, 240, .65); }
+.save input:focus { outline: none; border-color: var(--gold); }
+.btn.small { margin: 0; padding: 9px 24px 11px; font-size: 19px; box-shadow: 0 4px 0 var(--felt-edge), 0 10px 22px rgba(8, 5, 30, .4); }
+.btn.small:hover { box-shadow: 0 6px 0 var(--felt-edge), 0 12px 24px rgba(8, 5, 30, .45); }
+.save-msg { margin: 0; min-height: 1.35em; font-size: 15px; color: var(--lav); }
+.save-msg[data-kind="error"] { color: #ffa3b0; }
+.saved { margin: 2px 0 0; color: var(--gold); font-weight: 600; }
+
+.board-panel { width: min(480px, 100%); }
+.board-panel .wordmark.mid { font-size: clamp(40px, 5.4vw, 66px); }
+.tabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(9, 7, 28, .45); border: 1px solid rgba(236, 231, 255, .12); }
+.tab { border: 0; padding: 8px 18px; border-radius: 999px; background: none; color: var(--lav); font: 600 17px/1.2 var(--font); position: relative; }
+.tab:hover { color: var(--felt); }
+.tab[aria-selected="true"] { background: var(--felt); color: var(--plum); }
+.tab:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.board-list { list-style: none; margin: 2px 0 0; padding: 0; width: 100%; display: grid; gap: 5px; }
+.board-list:empty { display: none; }
+.row {
+  display: grid; grid-template-columns: 2.4em 1fr auto; align-items: center; gap: 10px;
+  padding: 6px 16px 6px 8px; border-radius: 14px; background: rgba(9, 7, 28, .32); text-align: left;
+}
+.row .rank { font-weight: 700; color: var(--lav); text-align: center; font-variant-numeric: tabular-nums; }
+.row .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--felt); font-weight: 600; }
+.row .pts { font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; }
+.row[data-medal] .rank { display: grid; place-items: center; width: 1.75em; height: 1.75em; margin: 0 auto; border-radius: 50%; color: var(--plum); }
+.row[data-medal="1"] .rank { background: var(--gold); }
+.row[data-medal="2"] .rank { background: #d9def2; }
+.row[data-medal="3"] .rank { background: #e9a56d; }
+.row.you { background: rgba(255, 201, 74, .15); box-shadow: inset 0 0 0 1.5px rgba(255, 201, 74, .55); }
+.board-note { margin: 6px 0; color: var(--lav); max-width: 26em; }
 
 @media (max-width: 600px) {
   .panel { padding: 26px 22px 22px; }
   .legend { font-size: 15px; }
   .stats { gap: 6px 20px; }
+  .btn.choice { min-width: 0; width: 100%; }
+}
+
+/* short screens (a phone on its side): everything a size down, the two ways to play side by side */
+@media (max-height: 560px) {
+  .panel { gap: 8px; padding: 18px 26px 16px; border-radius: 24px; max-width: 640px; }
+  .wordmark { font-size: clamp(44px, 13vh, 72px); }
+  .wordmark.mid { font-size: clamp(34px, 10vh, 54px); }
+  .wordmark.big { font-size: clamp(46px, 14vh, 78px); }
+  .pitch { font-size: 15px; margin: 0; }
+  .legend { font-size: 14px; gap: 0; margin: 0; }
+  .legend img { width: 38px; height: 38px; }
+  .btn { margin-top: 2px; padding: 9px 36px 11px; font-size: 21px; }
+  .choose { grid-template-columns: 1fr 1fr; margin: 0; }
+  .btn.choice { min-width: 0; font-size: 18px; padding: 10px 18px 12px; }
+  .kicker { font-size: 18px; }
+  .stats dd { font-size: 24px; }
+  .row { padding-block: 4px; }
+  .over-score, .over-next { gap: 8px; }
+}
+@media (max-height: 560px) and (min-width: 640px) {
+  #over .panel { flex-direction: row; align-items: center; gap: 34px; max-width: 760px; }
+  #over .over-next { width: auto; min-width: 300px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #stage.shake #view, .cue .pill, .cue .pill.out, .panel, .hearts img.drop, .hearts img.pop { animation-duration: .01s; }
+  #stage.shake #view, .cue .pill, .cue .pill.out, .panel, .screen.dim, .hearts img.drop, .hearts img.pop { animation-duration: .01s; }
+  .btn, .hint, .combo, .hand-cursor { transition-duration: .01s; }
 }
 
 /* D in hands mode: what the tracking is doing */
@@ -232,3 +318,5 @@ button.dwell::after {
   font: 12px/1.45 ui-monospace, Consolas, monospace; color: #e8e4ff; background: rgba(11, 10, 31, .78);
   border-radius: 8px; pointer-events: none; white-space: pre;
 }
+
+.noscript { position: fixed; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; font-size: 20px; }

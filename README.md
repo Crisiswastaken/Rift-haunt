@@ -5,14 +5,16 @@ last one and the ghost bursts into felt wisps. One stroke hits every ghost showi
 Google's 2016 Magic Cat Academy doodle, with you in the middle where the cat was.
 
 Play with your **hands**: the webcam cuts you out into the graveyard and you draw in the air with quick swipes.
-Or play with the **mouse** (or a pen, or a finger on a touch screen).
+Or play with the **mouse** (or a pen, or a finger on a touch screen). At the end of a run you can put your score on
+the **leaderboard**, one for mouse & touch and one for hands.
 
 ```
 npm install      # also fetches the hand-tracking models and wasm into public/vision/ (tools/fetch_vision.mjs)
-npm run dev      # http://localhost:5173
-npm test         # recogniser, director, hand-pen and real-footage replay tests
+npm run dev      # http://localhost:5173, with a working leaderboard kept in memory
+npm test         # recogniser, director, hand-pen, real-footage replay and leaderboard tests
 npm run build    # static site in dist/, works from any sub-path
 python tools/build_assets.py   # rebuild public/assets from reference/generated
+node tools/make_caps.mjs       # rebuild the leaderboard's score ceilings after changing PACE or RULES
 ```
 
 ## How it plays
@@ -34,6 +36,55 @@ player) it holds out for several minutes, at 1.6 s it goes down around four. All
 `src/config.ts`.
 
 Esc or P pauses (so does leaving the tab). Enter plays again from the title and game-over screens. M mutes.
+
+## Leaderboard
+
+After a run that scored, the game-over screen offers to put it on the leaderboard under a name (2 to 16 letters,
+numbers, spaces and `. _ - '`). There's a board for **mouse & touch** and one for **hands**, a tab each; the run's
+board is fixed by how it was played. Each name keeps its best score per board, and the last name used is remembered.
+
+It lives in one serverless function (`api/leaderboard.ts`) and Upstash Redis: no database server to run. Nothing the
+browser says is taken on trust, since anything in the page can be changed from the console:
+
+- **A ticket per run.** When a run starts the game asks for one; it's signed by the server (HMAC), names the board,
+  is good for one save and expires after 4 hours. Saving a run on the other board, or with a made-up ticket, fails.
+- **The run, not the score.** The game sends a log of what happened (each hit with how many symbols and ghosts, each
+  miss, each heart lost, bolts, heart ghosts) and the server works the score out again with the game's rules
+  (`api/_lib/rules.ts`). It has to come to exactly the score claimed, or the save is turned away. So does a log that
+  breaks the rules: more than 8 strokes in a second, heart ghosts from nowhere, a run that didn't end with the
+  last heart, or one longer than its ticket has existed.
+- **A ceiling.** No run can pass what a flawless player could have done in that time. `tools/oracle.ts` plays the real
+  director with a bot that strokes every 0.12 s and never misses, rushing or waiting for multi-kills; the most any of
+  180 such runs reached at each moment, plus half again, is the cap (`api/_lib/caps.ts`). For mouse & touch that's
+  4,630 at a minute and 30,030 at five; a test checks the caps still sit above fresh flawless runs.
+- **Names** are tidied and checked on the server for slurs and profanity, including spaced-out, stretched, accented
+  and leetspeak spellings (`api/_lib/names.ts`; the word list is ROT13'd and never sent to the browser). Names only
+  ever go onto the page as text.
+- **Limits.** Saves only from the game's own pages, 6 a minute and 40 an hour per address (kept as a keyed hash,
+  never the address itself). Reading the board is cached at the edge for 10 s.
+- **Clean-up.** With `LEADERBOARD_ADMIN_KEY` set, an entry can be taken off:
+  `curl -X DELETE -H "Authorization: Bearer $KEY" "https://<site>/api/leaderboard?mode=hands&name=<name>"`.
+
+Turned-away runs are logged with the reason. Like any game that runs in the browser it can't be made cheat-proof (a
+script that plays perfectly is still playing), but editing the score, the page or the request gets nowhere, and
+nothing can be claimed past flawless play. Saving is off with `?debug`, which exposes the game in the console.
+
+## Deploying
+
+The game is a static site plus one function, made for Vercel:
+
+1. Import the repo as a Vercel project (it's detected as Vite: `npm run build`, output `dist`; `npm install` fetches
+   the hand-tracking models).
+2. Add **Upstash Redis** from the project's Storage tab (the free tier is plenty). It sets `KV_REST_API_URL` and
+   `KV_REST_API_TOKEN`, which is all the leaderboard needs; without them the game plays and the leaderboard says it
+   isn't set up.
+3. Optional: `LEADERBOARD_SECRET` to sign tickets with (otherwise one is derived from the Redis token),
+   `LEADERBOARD_ADMIN_KEY` (16+ characters) for taking entries off.
+4. Set `VITE_SITE_URL` in `.env` to the game's address (it's `https://tryrift.fun/halloween/` now) for link previews.
+
+To serve it under a path of another site, rewrite that path to this project (e.g. `/halloween/:path*` to
+`https://<this-project>.vercel.app/:path*`): the game and its API both use relative URLs. `vercel.json` sets caching
+(a year for the hashed JS and CSS, a week for art and models) and a few security headers.
 
 ## Hands mode
 
@@ -122,6 +173,9 @@ JS for the game, 1.2 MB of art, and ~27 MB of tracking models and wasm (the body
 | `src/scene/scene.ts` | The v6b graveyard: 11 layers, lantern glow, fireflies, a slow parallax drift. |
 | `src/audio/beat.ts`, `music.ts` | The score and the live player (lookahead scheduler, mute, muffle). |
 | `src/ui/hud.ts` | Hearts, score, combo, cues, screens, the fingertip firefly and hold-to-press. |
+| `src/ui/board.ts` | The leaderboard in the game: a ticket per run, the save form, the board with its two tabs. |
+| `api/leaderboard.ts`, `api/_lib/` | The leaderboard function: `handler.ts` (the API), `rules.ts` (scoring a run's log), `caps.ts` (generated ceilings), `names.ts` + `name-shape.ts` (names), `store.ts` (Upstash over REST, or memory). |
+| `tools/oracle.ts`, `tools/make_caps.mjs` | A flawless player against the real director, and the script that turns its runs into `caps.ts`. |
 | `tools/build_assets.py` | Builds `public/assets` from `reference/generated`. |
 | `tools/fetch_vision.mjs` | Copies MediaPipe's wasm and downloads the three models into `public/vision/` (runs on `npm install`). |
 

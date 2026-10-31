@@ -14,6 +14,8 @@ import { Fx, Ink } from './fx';
 import { Ghost, type World } from './ghost';
 import { recorder } from '../debug/recorder';
 import { Hands } from './hands';
+import { Board } from '../ui/board';
+import { EV } from '../../api/_lib/rules';
 
 /** camera: starting the camera and hand tracking; practice: one ghost to banish before a hands run */
 type Mode = 'title' | 'camera' | 'practice' | 'ready' | 'play' | 'paused' | 'over';
@@ -87,6 +89,12 @@ export class Game {
   private coachUntil = 0;
   /** bolt strikes still to land: each banishes its ghost when the bolt hits */
   private pending: { g: Ghost; at: number }[] = [];
+  /** the leaderboard, this run's ticket for it, and what happened in the run (api/_lib/rules.ts checks it) */
+  private board = new Board();
+  private ticket: Promise<string | null> = Promise.resolve(null);
+  private log: number[][] = [];
+  /** the leaderboard is up, over the title or the game-over screen */
+  private boardFrom: 'title' | 'over' | null = null;
   private last = performance.now();
 
   constructor(private view: HTMLCanvasElement, private art: Art, private hud: Hud, private mouse: PointerPen, private music: Music) {
@@ -111,6 +119,8 @@ export class Game {
     hud.on('pause', () => this.pause());
     hud.on('resume', () => this.resume());
     hud.on('home', () => this.title());
+    hud.on('board', () => this.openBoard());
+    hud.on('board-back', () => this.closeBoard());
     hud.on('mute', () => hud.setMuted(music.toggleMute()));
     hud.setMuted(music.muted);
     // browsers only let sound start from a click or a key
@@ -118,6 +128,9 @@ export class Game {
     addEventListener('pointerdown', wake);
     addEventListener('keydown', wake);
     addEventListener('keydown', e => {
+      // typing a name for the leaderboard isn't a shortcut
+      if ((e.target as HTMLElement).closest?.('input, textarea')) return;
+      if (e.key === 'Escape' && this.boardFrom) { this.closeBoard(); return; }
       if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
         if (this.mode === 'paused') this.resume(); else this.pause();
       }
@@ -125,7 +138,7 @@ export class Game {
       // D in hands mode: what the tracking is doing (frame rates, lag, which hand, the finger readings)
       if ((e.key === 'd' || e.key === 'D') && this.hands.on) hud.debug(!hud.debugging);
       // Enter plays from the title and the game-over screen (when a button isn't the one being pressed)
-      if (e.key === 'Enter' && (this.mode === 'title' || this.mode === 'over') && !(e.target as HTMLElement).closest?.('button')) void this.play(this.input);
+      if (e.key === 'Enter' && (this.mode === 'title' || this.mode === 'over') && !this.boardFrom && !(e.target as HTMLElement).closest?.('button')) void this.play(this.input);
     });
     // stepping away pauses the run
     addEventListener('blur', () => this.pause());
@@ -135,7 +148,7 @@ export class Game {
     addEventListener('resize', () => this.resize());
     this.resize();
     hud.setBest(this.best);
-    hud.setInput(this.input);
+    hud.setInput(this.input, store(INPUT_KEY) !== null);
   }
 
   private get pens(): Pen[] { return [this.mouse, this.hands.pen]; }
@@ -161,13 +174,15 @@ export class Game {
 
   title() {
     this.mode = 'title';
+    this.boardFrom = null;
+    void this.board.offer(null);
     for (const p of this.pens) p.reset();
     this.clearGhosts(false);
     this.fx.clear(); this.ink.clear();
     this.hud.coach(null);
     this.hud.skip(false);
     this.hud.setBest(this.best);
-    this.hud.setInput(this.input);
+    this.hud.setInput(this.input, store(INPUT_KEY) !== null);
     this.hud.show('title', 'title');
     // two ghosts keep you company on the title, hovering either side
     const w = this.w;
@@ -180,6 +195,7 @@ export class Game {
   /** play with the mouse or with your hands; hands start the camera first (and stay on until you switch back) */
   private async play(input: Input) {
     if (this.mode === 'camera') return;
+    this.boardFrom = null;
     this.input = input;
     store(INPUT_KEY, input);
     this.hud.setInput(input);
@@ -212,6 +228,8 @@ export class Game {
     this.endAt = Infinity; this.graceUntil = 0; this.hurtT = -9;
     this.hearts = RULES.hearts; this.healing = 0;
     this.score = 0; this.chain = 0; this.banished = 0;
+    this.log = [];
+    this.ticket = this.board.ticket(this.input);
     this.w.speed = 1;
     this.hud.setHearts(this.hearts);
     this.hud.setScore(0);
@@ -238,6 +256,7 @@ export class Game {
     if (this.practice?.live) this.practice.banish(this.w);
     this.practice = null;
     this.score = 0; this.chain = 0; this.banished = 0;
+    this.log = [];
     this.hud.setScore(0);
     this.hud.setCombo(0);
     this.hud.skip(false);
@@ -279,6 +298,26 @@ export class Game {
     if (isBest) { this.best = this.score; store(BEST_KEY, String(this.best)); }
     this.hud.over({ score: this.score, banished: this.banished, seconds: this.runT, best: this.best, isBest });
     this.hud.show('over', 'over');
+    void this.board.offer({ ticket: this.ticket, mode: this.input, score: this.score, seconds: this.runT, log: this.log });
+  }
+
+  /** the leaderboard, over the title or the game-over screen; it opens on the way you play */
+  private openBoard() {
+    if (this.mode !== 'title' && this.mode !== 'over') return;
+    this.boardFrom = this.mode;
+    this.hud.show('board', this.mode);
+    void this.board.show(this.input);
+  }
+
+  private closeBoard() {
+    if (!this.boardFrom) return;
+    this.hud.show(this.boardFrom, this.boardFrom);
+    this.boardFrom = null;
+  }
+
+  /** what happened, for the leaderboard: [hundredths of a second into the run, what, ...] (api/_lib/rules.ts) */
+  private note(...e: number[]) {
+    if (this.mode === 'play') this.log.push([Math.round(this.runT * 100), ...e]);
   }
 
   private clearGhosts(poof: boolean) {
@@ -313,8 +352,11 @@ export class Game {
       const c = centroid(pts);
       this.fx.mark(this.art.glyphs[id], c.x, c.y, w.U * .075);
       this.setChain(0);
+      this.note(EV.miss);
       return;
     }
+    // logged before the banishing, which can bring a heart ghost's heart (logged after it)
+    this.note(EV.hit, hit.length, hit.filter(g => g.slots.length === 1).length);
     this.setChain(this.chain + 1);
     const mult = this.mult();
     let kills = 0, gained = 0;
@@ -342,6 +384,7 @@ export class Game {
     const w = this.w, bolt = this.art.glyphs.bolt;
     this.setChain(this.chain + 1);
     const mult = this.mult(), order = [...live].sort((a, b) => a.x - b.x);
+    this.note(EV.bolt, order.reduce((n, g) => n + g.slots.length, 0), order.length);
     let gained = 0;
     order.forEach((g, i) => {
       const delay = .06 + i * .07, n = g.slots.length, at = g.glyphAt(w, this.art, 0);
@@ -362,12 +405,16 @@ export class Game {
 
   /** a heart ghost's heart flies up to the HUD; at full hearts it's worth points instead */
   private heal(g: Ghost) {
+    // a bolt's last strike can land after the run is over: too late for anything
+    if (this.mode !== 'play') return;
     if (this.hearts + this.healing >= RULES.hearts) {
+      this.note(EV.bonus);
       this.addScore(50);
       this.fx.score('+50', SYMBOLS.heart.color, g.x, g.y - g.box(this.w).w * .6, this.w.U * .026);
       return;
     }
     const slot = this.hearts + this.healing;
+    this.note(EV.heal);
     this.healing++;
     this.fx.heart(this.art.heart, g.x, g.y, this.w.U * .05, () => this.hud.heartSlot(slot), () => {
       this.healing--;
@@ -380,6 +427,7 @@ export class Game {
 
   private hurt() {
     if (this.clock < this.graceUntil || this.mode !== 'play') return;
+    this.note(EV.hurt);
     this.hearts--;
     this.graceUntil = this.clock + RULES.grace;
     this.hurtT = this.clock;

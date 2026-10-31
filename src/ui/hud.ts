@@ -2,11 +2,13 @@
    firefly at your fingertip, which presses a menu button when you hold it there. */
 import { RULES } from '../config';
 
-export type Screen = 'loading' | 'title' | 'camera' | 'pause' | 'over';
+export type Screen = 'loading' | 'title' | 'camera' | 'pause' | 'over' | 'board';
 export interface RunStats { score: number; banished: number; seconds: number; best: number; isBest: boolean }
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const ASSETS = `${import.meta.env.BASE_URL}assets/`;
+/** a phone or tablet: no mouse, so "mouse" mode is played by touch */
+export const TOUCH = matchMedia('(hover: none) and (pointer: coarse)').matches;
 
 export class Hud {
   private hearts = $('hearts');
@@ -24,6 +26,7 @@ export class Hud {
     for (const img of document.querySelectorAll<HTMLImageElement>('img[data-src]')) img.src = ASSETS + img.dataset.src;
     stage.append(this.dark);
     this.dark.setAttribute('aria-live', 'polite');
+    if (TOUCH) for (const el of document.querySelectorAll<HTMLElement>('[data-touch]')) el.textContent = el.dataset.touch!;
     this.hearts.innerHTML = Array.from({ length: RULES.hearts }, () => `<img src="${ASSETS}hud/heart.webp" alt="" draggable="false">`).join('');
   }
 
@@ -33,7 +36,7 @@ export class Hud {
 
   /** which screen is up (or none), and the stage's state for styling */
   show(screen: Screen | null, state: string) {
-    for (const s of ['loading', 'title', 'camera', 'pause', 'over'] as Screen[]) $(s).hidden = s !== screen;
+    for (const s of ['loading', 'title', 'camera', 'pause', 'over', 'board'] as Screen[]) $(s).hidden = s !== screen;
     this.stage.dataset.state = state;
   }
 
@@ -125,13 +128,14 @@ export class Hud {
     b.setAttribute('aria-pressed', String(muted));
   }
 
-  /** mouse or hands: the title marks the last one used, and the switch links offer the other */
-  setInput(input: 'mouse' | 'hands') {
+  /** mouse or hands: the title marks the last one used (once there's been a last time), and the switch links offer
+      the other */
+  setInput(input: 'mouse' | 'hands', played = true) {
     for (const b of document.querySelectorAll<HTMLElement>('[data-action="play-hands"], [data-action="play-mouse"]')) {
-      b.classList.toggle('last', b.dataset.action === `play-${input}`);
+      b.classList.toggle('last', played && b.dataset.action === `play-${input}`);
     }
     for (const b of document.querySelectorAll<HTMLElement>('[data-action="switch"]')) {
-      b.textContent = input === 'hands' ? 'Switch to the mouse' : 'Switch to your hands';
+      b.textContent = input === 'hands' ? (TOUCH ? 'Switch to touch' : 'Switch to the mouse') : 'Switch to your hands';
     }
   }
 

@@ -20,6 +20,8 @@
   },
   "include": [
     "src",
-    "tests"
+    "api",
+    "tests",
+    "tools/oracle.ts"
   ]
 }

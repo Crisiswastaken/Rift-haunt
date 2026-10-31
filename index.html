@@ -3,15 +3,29 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Haunt</title>
+  <title>Haunt: a Halloween drawing game</title>
   <meta name="description" content="Ghosts drift through a misty graveyard toward you. Draw the shape above each one to banish it. A free Halloween game that runs in your browser.">
   <meta name="theme-color" content="#14123a">
-  <link rel="icon" href="/favicon.png" type="image/png">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="./favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="RIFT">
+  <meta property="og:title" content="Haunt: a Halloween drawing game">
+  <meta property="og:description" content="Ghosts drift through a misty graveyard toward you. Draw the shape above each one to banish it, with your mouse, your finger or your hand in the air.">
+  <meta property="og:url" content="%VITE_SITE_URL%">
+  <meta property="og:image" content="%VITE_SITE_URL%og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Haunt: felt ghosts in a moonlit graveyard">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400..700&display=swap">
 </head>
 <body>
+  <noscript><p class="noscript">Haunt is a game that runs in your browser: please turn on JavaScript to play.</p></noscript>
   <main id="stage" data-state="loading" aria-label="Haunt">
     <canvas id="view" aria-hidden="true"></canvas>
 
@@ -56,11 +70,12 @@
           </button>
           <button type="button" class="btn choice ghosty" data-action="play-mouse">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a6 6 0 0 1 6 6v8a6 6 0 0 1-12 0V8a6 6 0 0 1 6-6Zm-1 2.1A4 4 0 0 0 8 8v1h3Zm2 0V9h3V8a4 4 0 0 0-3-3.9Z"/></svg>
-            Play with the mouse
+            <span data-touch="Play with touch">Play with the mouse</span>
           </button>
         </div>
-        <p class="sound">Hands mode uses your camera; nothing leaves your device. Sound on, M mutes.</p>
-        <p id="best-line" class="best" hidden>Your best is <b id="title-best">0</b></p>
+        <p class="tip">Turn your phone sideways for a bigger graveyard.</p>
+        <p class="sound">Hands mode uses your camera; nothing leaves your device. Sound on<span class="keys">, M mutes</span>.</p>
+        <p class="title-foot"><span id="best-line" class="best" hidden>Your best is <b id="title-best">0</b> · </span><button type="button" class="link inline" data-action="board">Leaderboard</button></p>
       </div>
     </section>
 
@@ -88,16 +103,45 @@
 
     <section id="over" class="screen dim" hidden>
       <div class="panel">
-        <p class="kicker">The ghosts got you.</p>
-        <p class="final"><output id="over-score" class="wordmark big">0</output><span id="over-new" class="stamp" hidden>New best</span></p>
-        <dl class="stats">
-          <div><dd id="over-banished">0</dd><dt>banished</dt></div>
-          <div><dd id="over-time">0:00</dd><dt>survived</dt></div>
-          <div><dd id="over-best">0</dd><dt>your best</dt></div>
-        </dl>
-        <button type="button" class="btn" data-action="play">Play again</button>
-        <button type="button" class="link" data-action="switch">Switch to your hands</button>
-        <button type="button" class="link" data-action="home">Menu</button>
+        <div class="over-score">
+          <p class="kicker">The ghosts got you.</p>
+          <p class="final"><output id="over-score" class="wordmark big">0</output><span id="over-new" class="stamp" hidden>New best</span></p>
+          <dl class="stats">
+            <div><dd id="over-banished">0</dd><dt>banished</dt></div>
+            <div><dd id="over-time">0:00</dd><dt>survived</dt></div>
+            <div><dd id="over-best">0</dd><dt>your best</dt></div>
+          </dl>
+        </div>
+        <div class="over-next">
+          <form id="save" class="save" data-ui novalidate hidden>
+            <label class="save-label" for="save-name">Put it on the leaderboard <span id="save-mode" class="tag">Mouse &amp; touch</span></label>
+            <div class="save-row">
+              <input id="save-name" name="name" type="text" minlength="2" maxlength="16" autocomplete="nickname" autocapitalize="words" autocorrect="off" spellcheck="false" placeholder="Your name" enterkeyhint="done" aria-describedby="save-msg">
+              <button id="save-go" type="submit" class="btn small" data-action="save">Save</button>
+            </div>
+            <p id="save-msg" class="save-msg" aria-live="polite"></p>
+          </form>
+          <p id="saved" class="saved" aria-live="polite" hidden><span id="saved-text"></span></p>
+          <button type="button" class="btn" data-action="play">Play again</button>
+          <div class="links">
+            <button type="button" class="link" data-action="board">Leaderboard</button>
+            <button type="button" class="link" data-action="switch">Switch to your hands</button>
+            <button type="button" class="link" data-action="home">Menu</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="board" class="screen dim" hidden>
+      <div class="panel board-panel">
+        <h2 class="wordmark mid">Leaderboard</h2>
+        <div class="tabs" role="tablist" aria-label="Played with">
+          <button id="tab-mouse" type="button" role="tab" class="tab" data-action="tab-mouse" aria-selected="true" aria-controls="board-list">Mouse &amp; touch</button>
+          <button id="tab-hands" type="button" role="tab" class="tab" data-action="tab-hands" aria-selected="false" aria-controls="board-list" tabindex="-1">Hands</button>
+        </div>
+        <ol id="board-list" class="board-list" role="tabpanel" aria-labelledby="tab-mouse"></ol>
+        <p id="board-note" class="board-note" aria-live="polite" hidden></p>
+        <button type="button" class="btn" data-action="board-back">Back</button>
       </div>
     </section>
   </main>
